@@ -8,9 +8,9 @@
 ## 📋 Prerequisites
 
 Before starting this chapter:
-- [ ] Your modular project structure is set up (✅ Done)
-- [ ] Library package exists with Models target (✅ Done)
-- [ ] Basic understanding of Swift structs and enums
+- [x] Your modular project structure is set up (✅ Done)
+- [x] Library package exists with Models target (✅ Done)
+- [x] Basic understanding of Swift structs and enums
 
 ---
 
@@ -85,9 +85,9 @@ public extension ShoppingItem {
 ```
 
 **✅ Completion Check:**
-- [ ] Model compiles without errors
-- [ ] All properties are properly initialized
-- [ ] Public API is correctly exposed
+- [x] Model compiles without errors
+- [x] All properties are properly initialized
+- [x] Public API is correctly exposed
 
 ---
 
