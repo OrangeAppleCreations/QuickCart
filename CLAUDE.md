@@ -35,9 +35,21 @@ xcodebuild -scheme QuickCart -configuration Release build
 ### Testing
 This project currently has no test targets configured. To add tests, create test targets in Xcode.
 
+## Development Guide
+
+This project includes a comprehensive development guide:
+- **DEVELOPMENT_GUIDE.md** - Master roadmap with 11 chapters
+- **guides/** directory - Detailed chapter-by-chapter instructions
+
+### Quick Start
+1. Follow Chapter 1-3 for basic functionality (Weeks 1-3)
+2. Each chapter has specific learning objectives and completion criteria
+3. All code examples and tests are provided
+
 ## Development Notes
 
-- Project uses Xcode 26.0 and Swift 6.0+ features
-- Minimum deployment target and other build settings are configured in the project file
-- Uses standard SwiftUI App lifecycle (not UIKit AppDelegate)
-- No external dependencies or Swift Package Manager packages currently configured
+- Project uses Xcode 26.0 and Swift 6.0+ features with modular package architecture
+- **Library** package contains all business logic in separate modules (AppFeature, Models)
+- **Executable** contains only `@main` entry point for clean separation
+- Uses SwiftData for persistent storage with repository pattern
+- Minimum deployment target and build settings are configured in project file
