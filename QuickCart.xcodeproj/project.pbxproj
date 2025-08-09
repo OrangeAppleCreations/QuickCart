@@ -6,12 +6,18 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		C41EF7572E472DA100DD35C4 /* AppFeature in Frameworks */ = {isa = PBXBuildFile; productRef = C41EF7562E472DA100DD35C4 /* AppFeature */; };
+		C41EF7592E4736AC00DD35C4 /* Models in Frameworks */ = {isa = PBXBuildFile; productRef = C41EF7582E4736AC00DD35C4 /* Models */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		C41EF73B2E471FF400DD35C4 /* QuickCart.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = QuickCart.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		C41EF7542E472A9900DD35C4 /* Library */ = {isa = PBXFileReference; lastKnownFileType = wrapper; path = Library; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		C41EF73D2E471FF400DD35C4 /* QuickCart */ = {
+		C41EF7522E47298600DD35C4 /* QuickCart */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = QuickCart;
 			sourceTree = "<group>";
@@ -23,6 +29,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C41EF7592E4736AC00DD35C4 /* Models in Frameworks */,
+				C41EF7572E472DA100DD35C4 /* AppFeature in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -32,7 +40,9 @@
 		C41EF7322E471FF400DD35C4 = {
 			isa = PBXGroup;
 			children = (
-				C41EF73D2E471FF400DD35C4 /* QuickCart */,
+				C41EF7522E47298600DD35C4 /* QuickCart */,
+				C41EF7542E472A9900DD35C4 /* Library */,
+				C41EF7552E472DA100DD35C4 /* Frameworks */,
 				C41EF73C2E471FF400DD35C4 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -43,6 +53,13 @@
 				C41EF73B2E471FF400DD35C4 /* QuickCart.app */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		C41EF7552E472DA100DD35C4 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -61,10 +78,12 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				C41EF73D2E471FF400DD35C4 /* QuickCart */,
+				C41EF7522E47298600DD35C4 /* QuickCart */,
 			);
 			name = QuickCart;
 			packageProductDependencies = (
+				C41EF7562E472DA100DD35C4 /* AppFeature */,
+				C41EF7582E4736AC00DD35C4 /* Models */,
 			);
 			productName = QuickCart;
 			productReference = C41EF73B2E471FF400DD35C4 /* QuickCart.app */;
@@ -186,6 +205,7 @@
 				SDKROOT = iphoneos;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 6.0;
 			};
 			name = Debug;
 		};
@@ -242,6 +262,7 @@
 				MTL_FAST_MATH = YES;
 				SDKROOT = iphoneos;
 				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_VERSION = 6.0;
 				VALIDATE_PRODUCT = YES;
 			};
 			name = Release;
@@ -273,7 +294,7 @@
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
+				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;
@@ -305,7 +326,7 @@
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
+				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;
@@ -332,6 +353,17 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		C41EF7562E472DA100DD35C4 /* AppFeature */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = AppFeature;
+		};
+		C41EF7582E4736AC00DD35C4 /* Models */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = Models;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = C41EF7332E471FF400DD35C4 /* Project object */;
 }

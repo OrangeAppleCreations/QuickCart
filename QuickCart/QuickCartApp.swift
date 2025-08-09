@@ -1,10 +1,4 @@
-//
-//  QuickCartApp.swift
-//  QuickCart
-//
-//  Created by OrangeApple Creations on 09/08/2025.
-//
-
+import AppFeature
 import SwiftUI
 
 @main
