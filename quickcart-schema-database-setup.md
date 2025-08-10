@@ -2,7 +2,7 @@
 
 ## Overview
 
-This implementation follows the exact patterns from Point-Free Episode 323 "Modern Persistence", adapted for a QuickCart shopping list app. We'll create a SQL-first persistence architecture using GRDB, StructuredQueries, and SharingGRDB.
+This implementation follows the exact patterns from Point-Free Episode 323 "Modern Persistence", adapted for a QuickCart shopping list app. We'll create a SQL-first persistence architecture using StructuredQueries and SharingGRDB.
 
 ## Core Philosophy
 
@@ -34,6 +34,9 @@ struct ShoppingList: Identifiable {
 
 #### ShoppingItem
 ```swift
+import Foundation
+import SharingGRDB
+
 @Table
 struct ShoppingItem: Identifiable {
   let id: Int
@@ -56,6 +59,8 @@ struct ShoppingItem: Identifiable {
 
 #### Category (for organizing items)
 ```swift
+import SharingGRDB
+
 @Table
 struct Category: Identifiable {
   let id: Int
@@ -65,6 +70,8 @@ struct Category: Identifiable {
 
 #### ShoppingItemCategory (many-to-many join table)
 ```swift
+import SharingGRDB
+
 @Table
 struct ShoppingItemCategory {
   let shoppingItemID: ShoppingItem.ID
@@ -78,7 +85,7 @@ Create `Library/Sources/Models/DatabaseManager.swift`:
 
 #### Core Function
 ```swift
-import GRDB
+import Foundation
 import OSLog
 import Dependencies
 import SharingGRDB
