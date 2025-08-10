@@ -1,867 +1,812 @@
-# Chapter 2: Core UI Components
+# Chapter 2: GRDB Repository Pattern
 
 **⏱️ Estimated Time:** 1 Week  
-**🎯 Learning Objective:** Build reusable SwiftUI components using your data models
+**🎯 Learning Objective:** Implementeer type-veilige database toegang met GRDB repository pattern
 
 ---
 
 ## 📋 Prerequisites
 
 Before starting this chapter:
-- [ ] ✅ Chapter 1 completed - Data models are working
-- [ ] ✅ All Chapter 1 tests passing
-- [ ] ✅ Basic SwiftUI knowledge (Views, State, Binding)
+- [ ] ✅ Chapter 1 completed - Database schema & value types are working
+- [ ] ✅ All database tests passing
+- [ ] ✅ GRDB dependency successfully added
+- [ ] ✅ Basic understanding of repository pattern
 
 ---
 
 ## 🎯 Chapter Goals
 
 By the end of this chapter, you will have:
-- ✅ A beautiful `ItemRowView` component
-- ✅ An `AddItemView` for creating new items
-- ✅ A complete `ListDetailView` showing all items
-- ✅ Navigation structure in your app
-- ✅ Basic CRUD operations working in UI
-- ✅ SwiftUI previews for all components
+- ✅ Een complete GRDB database connection setup
+- ✅ Type-safe repository layer voor alle CRUD operations
+- ✅ Database connection pooling voor performance
+- ✅ Comprehensive error handling voor database operations
+- ✅ Repository tests die de Point-Free patterns volgen
+- ✅ Database observation setup voor reactive updates
+
+**🌟 Point-Free Principle:** *"Create a clean abstraction layer that makes database operations simple and safe"*
 
 ---
 
-## 📚 Lesson 2.1: Setup UI Infrastructure
+## 📚 Lesson 2.1: Database Connection Setup
 
-### Task 1: Update AppFeature with Navigation
+### Task 1: Create Database Manager
 
-**Location:** `Library/Sources/AppFeature/ContentView.swift`
-
-Replace the current content with:
+**Location:** `Library/Sources/Models/DatabaseManager.swift`
 
 ```swift
-import SwiftUI
-import Models
+import Foundation
+import GRDB
+import Sharing
 
-public struct ContentView: View {
-    @State private var lists = SampleData.sampleLists
-    @State private var selectedList: ShoppingList?
-    @State private var showingAddList = false
+// MARK: - Database Manager
+public final class DatabaseManager: @unchecked Sendable {
+    private let dbQueue: DatabaseQueue
     
-    public init() {}
-    
-    public var body: some View {
-        NavigationSplitView {
-            // Master: List of shopping lists
-            ListsOverviewView(
-                lists: $lists,
-                selectedList: $selectedList,
-                showingAddList: $showingAddList
-            )
-        } detail: {
-            // Detail: Selected list items
-            if let selectedList {
-                ListDetailView(
-                    list: binding(for: selectedList),
-                    lists: $lists
-                )
-            } else {
-                PlaceholderView()
-            }
-        }
-    }
-    
-    private func binding(for list: ShoppingList) -> Binding<ShoppingList> {
-        guard let index = lists.firstIndex(where: { $0.id == list.id }) else {
-            fatalError("List not found")
-        }
-        return $lists[index]
-    }
-}
-
-#Preview {
-    ContentView()
-}
-```
-
-**✅ Completion Check:**
-- [ ] ContentView compiles
-- [ ] Navigation structure is set up
-- [ ] Preview works
-
----
-
-## 📚 Lesson 2.2: Lists Overview
-
-### Task 2: Create ListsOverviewView
-
-**Location:** `Library/Sources/AppFeature/ListsOverviewView.swift`
-
-```swift
-import SwiftUI
-import Models
-
-struct ListsOverviewView: View {
-    @Binding var lists: [ShoppingList]
-    @Binding var selectedList: ShoppingList?
-    @Binding var showingAddList: Bool
-    
-    var body: some View {
-        List(selection: $selectedList) {
-            ForEach(lists) { list in
-                NavigationLink(value: list) {
-                    ListRowView(list: list)
-                }
-            }
-            .onDelete(perform: deleteLists)
-        }
-        .navigationTitle("Shopping Lists")
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Button {
-                    showingAddList = true
-                } label: {
-                    Image(systemName: "plus")
-                }
-            }
-        }
-        .sheet(isPresented: $showingAddList) {
-            AddListView { newList in
-                lists.append(newList)
-                selectedList = newList
-            }
-        }
-    }
-    
-    private func deleteLists(offsets: IndexSet) {
-        lists.remove(atOffsets: offsets)
-    }
-}
-
-struct ListRowView: View {
-    let list: ShoppingList
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Text(list.title)
-                    .font(.headline)
-                
-                Spacer()
-                
-                Text("\(list.completedItems.count)/\(list.items.count)")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-            
-            ProgressView(value: list.completionPercentage)
-                .tint(.green)
-            
-            Text("Updated \(list.updatedAt.formatted(.relative(presentation: .named)))")
-                .font(.caption2)
-                .foregroundColor(.secondary)
-        }
-        .padding(.vertical, 2)
-    }
-}
-
-#Preview("Lists Overview") {
-    NavigationView {
-        ListsOverviewView(
-            lists: .constant(SampleData.sampleLists),
-            selectedList: .constant(nil),
-            showingAddList: .constant(false)
-        )
-    }
-}
-
-#Preview("List Row") {
-    ListRowView(list: SampleData.sampleLists[0])
-        .padding()
-}
-```
-
-**✅ Completion Check:**
-- [ ] Lists are displayed correctly
-- [ ] Progress bars show completion
-- [ ] Delete functionality works
-- [ ] Previews render correctly
-
----
-
-## 📚 Lesson 2.3: Add List Functionality
-
-### Task 3: Create AddListView
-
-**Location:** `Library/Sources/AppFeature/AddListView.swift`
-
-```swift
-import SwiftUI
-import Models
-
-struct AddListView: View {
-    @Environment(\\.dismiss) private var dismiss
-    @State private var title = ""
-    @State private var selectedTemplate: ListTemplate?
-    
-    let onSave: (ShoppingList) -> Void
-    
-    var body: some View {
-        NavigationView {
-            Form {
-                Section("List Details") {
-                    TextField("List name", text: $title)
-                        .textInputAutocapitalization(.words)
-                }
-                
-                Section("Templates") {
-                    ForEach(ListTemplate.allCases) { template in
-                        Button {
-                            selectedTemplate = template
-                        } label: {
-                            HStack {
-                                VStack(alignment: .leading) {
-                                    Text(template.name)
-                                        .foregroundColor(.primary)
-                                    Text(template.description)
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                }
-                                Spacer()
-                                if selectedTemplate == template {
-                                    Image(systemName: "checkmark")
-                                        .foregroundColor(.accentColor)
-                                }
-                            }
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-            }
-            .navigationTitle("New List")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
-                        dismiss()
-                    }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
-                        saveList()
-                    }
-                    .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                }
-            }
-        }
-    }
-    
-    private func saveList() {
-        let newList = ShoppingList(
-            title: title.trimmingCharacters(in: .whitespacesAndNewlines),
-            items: selectedTemplate?.items ?? []
-        )
-        onSave(newList)
-        dismiss()
-    }
-}
-
-// MARK: - List Templates
-enum ListTemplate: CaseIterable, Identifiable {
-    case empty
-    case weekly
-    case party
-    case quick
-    
-    var id: Self { self }
-    
-    var name: String {
-        switch self {
-        case .empty: return "Empty List"
-        case .weekly: return "Weekly Groceries"
-        case .party: return "Party Supplies"
-        case .quick: return "Quick Run"
-        }
-    }
-    
-    var description: String {
-        switch self {
-        case .empty: return "Start with a blank list"
-        case .weekly: return "Common weekly grocery items"
-        case .party: return "Everything you need for a party"
-        case .quick: return "Quick essentials"
-        }
-    }
-    
-    var items: [ShoppingItem] {
-        switch self {
-        case .empty:
-            return []
-        case .weekly:
-            return [
-                ShoppingItem(name: "Milk", category: .dairy),
-                ShoppingItem(name: "Bread", category: .pantry),
-                ShoppingItem(name: "Eggs", quantity: 12, category: .dairy),
-                ShoppingItem(name: "Bananas", category: .produce),
-                ShoppingItem(name: "Chicken", category: .meat),
-            ]
-        case .party:
-            return [
-                ShoppingItem(name: "Chips", quantity: 3, category: .pantry),
-                ShoppingItem(name: "Soda", quantity: 6, category: .other),
-                ShoppingItem(name: "Ice", category: .frozen),
-                ShoppingItem(name: "Napkins", category: .household),
-            ]
-        case .quick:
-            return [
-                ShoppingItem(name: "Milk", category: .dairy),
-                ShoppingItem(name: "Bread", category: .pantry),
-            ]
-        }
-    }
-}
-
-#Preview {
-    AddListView { list in
-        print("New list: \\(list.title)")
-    }
-}
-```
-
-**✅ Completion Check:**
-- [ ] Can create new lists
-- [ ] Templates work correctly
-- [ ] Form validation prevents empty titles
-- [ ] Preview functions
-
----
-
-## 📚 Lesson 2.4: List Detail View
-
-### Task 4: Create ListDetailView
-
-**Location:** `Library/Sources/AppFeature/ListDetailView.swift`
-
-```swift
-import SwiftUI
-import Models
-
-struct ListDetailView: View {
-    @Binding var list: ShoppingList
-    @Binding var lists: [ShoppingList]
-    @State private var showingAddItem = false
-    @State private var searchText = ""
-    
-    private var filteredItems: [ShoppingItem] {
-        if searchText.isEmpty {
-            return list.items
+    public init(path: String? = nil) throws {
+        if let path = path {
+            // File-based database for production
+            dbQueue = try DatabaseQueue(path: path)
         } else {
-            return list.items.filter {
-                $0.name.localizedCaseInsensitiveContains(searchText)
-            }
+            // In-memory database for testing
+            dbQueue = DatabaseQueue()
+        }
+        
+        // Apply migrations
+        try DatabaseMigrator.migrator().migrate(dbQueue)
+        
+        // Enable foreign key support
+        try dbQueue.write { db in
+            try db.execute(sql: "PRAGMA foreign_keys = ON")
         }
     }
     
-    private var groupedItems: [ItemCategory: [ShoppingItem]] {
-        Dictionary(grouping: filteredItems) { $0.category }
-    }
+    // MARK: - Database Access
+    public var reader: DatabaseReader { dbQueue }
+    public var writer: DatabaseWriter { dbQueue }
     
-    var body: some View {
-        List {
-            if list.items.isEmpty {
-                EmptyStateView {
-                    showingAddItem = true
-                }
-            } else {
-                ForEach(ItemCategory.allCases, id: \\.self) { category in
-                    if let items = groupedItems[category], !items.isEmpty {
-                        Section(category.rawValue) {
-                            ForEach(items) { item in
-                                ItemRowView(
-                                    item: binding(for: item),
-                                    onDelete: { deleteItem(item) }
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        .navigationTitle(list.title)
-        .searchable(text: $searchText, prompt: "Search items")
-        .toolbar {
-            ToolbarItemGroup(placement: .primaryAction) {
-                Menu {
-                    Button("Clear Completed") {
-                        clearCompleted()
-                    }
-                    .disabled(list.completedItems.isEmpty)
-                } label: {
-                    Image(systemName: "ellipsis.circle")
-                }
-                
-                Button {
-                    showingAddItem = true
-                } label: {
-                    Image(systemName: "plus")
-                }
-            }
-        }
-        .sheet(isPresented: $showingAddItem) {
-            AddItemView { newItem in
-                list.addItem(newItem)
-                updateListInArray()
-            }
-        }
-    }
-    
-    private func binding(for item: ShoppingItem) -> Binding<ShoppingItem> {
-        guard let index = list.items.firstIndex(where: { $0.id == item.id }) else {
-            fatalError("Item not found")
-        }
-        return Binding(
-            get: { list.items[index] },
-            set: { 
-                list.items[index] = $0
-                updateListInArray()
-            }
-        )
-    }
-    
-    private func deleteItem(_ item: ShoppingItem) {
-        list.removeItem(withId: item.id)
-        updateListInArray()
-    }
-    
-    private func clearCompleted() {
-        list.clearCompleted()
-        updateListInArray()
-    }
-    
-    private func updateListInArray() {
-        if let index = lists.firstIndex(where: { $0.id == list.id }) {
-            lists[index] = list
-        }
+    // MARK: - Observation Support
+    public func observation<T>(
+        tracking request: @escaping (Database) throws -> T
+    ) -> ValueObservation<T> {
+        ValueObservation.tracking(request)
     }
 }
 
-struct EmptyStateView: View {
-    let onAddItem: () -> Void
+// MARK: - Shared Database Instance
+extension DatabaseManager {
+    public static let shared: DatabaseManager = {
+        do {
+            let documentsPath = FileManager.default
+                .urls(for: .documentDirectory, in: .userDomainMask)[0]
+            let dbPath = documentsPath.appendingPathComponent("QuickCart.sqlite").path
+            return try DatabaseManager(path: dbPath)
+        } catch {
+            fatalError("Failed to initialize database: \(error)")
+        }
+    }()
     
-    var body: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "cart")
-                .font(.system(size: 60))
-                .foregroundColor(.secondary)
-            
-            VStack(spacing: 8) {
-                Text("Your list is empty")
-                    .font(.title2)
-                    .fontWeight(.medium)
-                
-                Text("Add some items to get started")
-                    .font(.body)
-                    .foregroundColor(.secondary)
+    public static let preview: DatabaseManager = {
+        do {
+            let manager = try DatabaseManager() // In-memory
+            // Load sample data for previews
+            try manager.loadSampleData()
+            return manager
+        } catch {
+            fatalError("Failed to initialize preview database: \(error)")
+        }
+    }()
+}
+
+// MARK: - Sample Data Loading
+extension DatabaseManager {
+    public func loadSampleData() throws {
+        try writer.write { db in
+            // Insert sample shopping lists
+            for list in SampleData.shoppingLists {
+                try list.insert(db)
             }
             
-            Button("Add Item") {
-                onAddItem()
-            }
-            .buttonStyle(.borderedProminent)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(.systemGroupedBackground))
-    }
-}
-
-#Preview("List Detail") {
-    NavigationView {
-        ListDetailView(
-            list: .constant(SampleData.sampleLists[0]),
-            lists: .constant(SampleData.sampleLists)
-        )
-    }
-}
-
-#Preview("Empty State") {
-    NavigationView {
-        List {
-            EmptyStateView {
-                print("Add item tapped")
+            // Insert sample shopping items
+            for item in SampleData.shoppingItems {
+                try item.insert(db)
             }
         }
-        .navigationTitle("Empty List")
     }
 }
 ```
 
 **✅ Completion Check:**
-- [ ] Items display grouped by category
-- [ ] Search functionality works
-- [ ] Empty state shows when no items
-- [ ] Menu actions work
+- [ ] Database manager compiles without errors
+- [ ] Both file-based and in-memory databases work
+- [ ] Sample data loading works
+- [ ] Foreign key constraints are enabled
 
 ---
 
-## 📚 Lesson 2.5: Item Row Component
+## 📚 Lesson 2.2: Repository Base Pattern
 
-### Task 5: Create ItemRowView
+### Task 2: Create Generic Repository Base
 
-**Location:** `Library/Sources/AppFeature/ItemRowView.swift`
+**Location:** `Library/Sources/Models/Repository.swift`
 
 ```swift
-import SwiftUI
-import Models
+import Foundation
+import GRDB
+import Sharing
 
-struct ItemRowView: View {
-    @Binding var item: ShoppingItem
-    let onDelete: () -> Void
+// MARK: - Repository Error Types
+public enum RepositoryError: Error, LocalizedError {
+    case notFound(String)
+    case insertFailed(Error)
+    case updateFailed(Error)
+    case deleteFailed(Error)
+    case queryFailed(Error)
     
-    @State private var showingEditSheet = false
-    
-    var body: some View {
-        HStack(spacing: 12) {
-            // Completion checkbox
-            Button {
-                item.toggle()
-            } label: {
-                Image(systemName: item.isCompleted ? "checkmark.circle.fill" : "circle")
-                    .font(.title2)
-                    .foregroundColor(item.isCompleted ? .green : .secondary)
-            }
-            .buttonStyle(.plain)
-            
-            // Item content
-            VStack(alignment: .leading, spacing: 2) {
-                HStack {
-                    Text(item.displayName)
-                        .strikethrough(item.isCompleted)
-                        .foregroundColor(item.isCompleted ? .secondary : .primary)
-                    
-                    Spacer()
-                    
-                    Text(item.category.emoji)
-                }
-                
-                if !item.notes.isEmpty {
-                    Text(item.notes)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .lineLimit(1)
-                }
-            }
-        }
-        .contentShape(Rectangle())
-        .onTapGesture {
-            showingEditSheet = true
-        }
-        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-            Button("Delete", role: .destructive) {
-                onDelete()
-            }
-        }
-        .swipeActions(edge: .leading) {
-            Button("Edit") {
-                showingEditSheet = true
-            }
-            .tint(.blue)
-        }
-        .sheet(isPresented: $showingEditSheet) {
-            EditItemView(item: $item)
+    public var errorDescription: String? {
+        switch self {
+        case .notFound(let id):
+            return "Record with ID \(id) not found"
+        case .insertFailed(let error):
+            return "Insert failed: \(error.localizedDescription)"
+        case .updateFailed(let error):
+            return "Update failed: \(error.localizedDescription)"
+        case .deleteFailed(let error):
+            return "Delete failed: \(error.localizedDescription)"
+        case .queryFailed(let error):
+            return "Query failed: \(error.localizedDescription)"
         }
     }
 }
 
-#Preview("Item Row - Pending") {
-    List {
-        ItemRowView(
-            item: .constant(SampleData.sampleItems[0]),
-            onDelete: { print("Delete tapped") }
-        )
-    }
+// MARK: - Generic Repository Protocol
+public protocol Repository {
+    associatedtype Model: FetchableRecord & PersistableRecord & Identifiable
+    
+    var database: DatabaseManager { get }
+    
+    func fetch(id: Model.ID) async throws -> Model?
+    func fetchAll() async throws -> [Model]
+    func insert(_ model: Model) async throws -> Model
+    func update(_ model: Model) async throws -> Model
+    func delete(id: Model.ID) async throws
+    func delete(_ model: Model) async throws
 }
 
-#Preview("Item Row - Completed") {
-    List {
-        ItemRowView(
-            item: .constant({
-                var item = SampleData.sampleItems[1]
-                item.toggle()
-                return item
-            }()),
-            onDelete: { print("Delete tapped") }
-        )
+// MARK: - Repository Base Implementation
+public actor RepositoryBase<T>: Repository where T: FetchableRecord & PersistableRecord & Identifiable {
+    public typealias Model = T
+    
+    public let database: DatabaseManager
+    
+    public init(database: DatabaseManager = .shared) {
+        self.database = database
+    }
+    
+    // MARK: - CRUD Operations
+    
+    public func fetch(id: Model.ID) async throws -> Model? {
+        do {
+            return try await database.reader.read { db in
+                try Model.fetchOne(db, key: id)
+            }
+        } catch {
+            throw RepositoryError.queryFailed(error)
+        }
+    }
+    
+    public func fetchAll() async throws -> [Model] {
+        do {
+            return try await database.reader.read { db in
+                try Model.fetchAll(db)
+            }
+        } catch {
+            throw RepositoryError.queryFailed(error)
+        }
+    }
+    
+    public func insert(_ model: Model) async throws -> Model {
+        do {
+            try await database.writer.write { db in
+                try model.insert(db)
+            }
+            return model
+        } catch {
+            throw RepositoryError.insertFailed(error)
+        }
+    }
+    
+    public func update(_ model: Model) async throws -> Model {
+        do {
+            try await database.writer.write { db in
+                try model.update(db)
+            }
+            return model
+        } catch {
+            throw RepositoryError.updateFailed(error)
+        }
+    }
+    
+    public func delete(id: Model.ID) async throws {
+        do {
+            let rowsDeleted = try await database.writer.write { db in
+                try Model.deleteOne(db, key: id)
+            }
+            if !rowsDeleted {
+                throw RepositoryError.notFound("\(id)")
+            }
+        } catch {
+            if case RepositoryError.notFound = error {
+                throw error
+            }
+            throw RepositoryError.deleteFailed(error)
+        }
+    }
+    
+    public func delete(_ model: Model) async throws {
+        try await delete(id: model.id)
     }
 }
 ```
 
 **✅ Completion Check:**
-- [ ] Checkbox toggles completion state
-- [ ] Swipe actions work (delete & edit)
-- [ ] Shows item notes when available
-- [ ] Visual feedback for completed items
+- [ ] Generic repository base is implemented
+- [ ] All CRUD operations are async/await
+- [ ] Comprehensive error handling
+- [ ] Actor isolation for thread safety
 
 ---
 
-## 📚 Lesson 2.6: Add/Edit Item Views
+## 📚 Lesson 2.3: Shopping List Repository
 
-### Task 6: Create AddItemView
+### Task 3: Create ShoppingListRepository
 
-**Location:** `Library/Sources/AppFeature/AddItemView.swift`
+**Location:** `Library/Sources/Models/ShoppingListRepository.swift`
 
 ```swift
-import SwiftUI
-import Models
+import Foundation
+import GRDB
 
-struct AddItemView: View {
-    @Environment(\\.dismiss) private var dismiss
-    @State private var name = ""
-    @State private var quantity = 1
-    @State private var category = ItemCategory.other
-    @State private var notes = ""
+// MARK: - Shopping List Repository
+public actor ShoppingListRepository: RepositoryBase<ShoppingList> {
     
-    let onSave: (ShoppingItem) -> Void
+    // MARK: - Custom Queries
     
-    var body: some View {
-        NavigationView {
-            Form {
-                Section("Item Details") {
-                    TextField("Item name", text: $name)
-                        .textInputAutocapitalization(.words)
-                    
-                    Stepper("Quantity: \\(quantity)", value: $quantity, in: 1...99)
-                    
-                    Picker("Category", selection: $category) {
-                        ForEach(ItemCategory.allCases, id: \\.self) { category in
-                            HStack {
-                                Text(category.emoji)
-                                Text(category.rawValue)
-                            }
-                            .tag(category)
-                        }
-                    }
-                }
-                
-                Section("Notes") {
-                    TextField("Add notes (optional)", text: $notes, axis: .vertical)
-                        .lineLimit(3, reservesSpace: true)
-                }
+    /// Fetch lists ordered by most recently updated
+    public func fetchAllOrderedByDate() async throws -> [ShoppingList] {
+        do {
+            return try await database.reader.read { db in
+                try ShoppingList
+                    .order(ShoppingList.Columns.updatedAt.desc)
+                    .fetchAll(db)
             }
-            .navigationTitle("New Item")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
-                        dismiss()
-                    }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Add") {
-                        saveItem()
-                    }
-                    .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                }
-            }
+        } catch {
+            throw RepositoryError.queryFailed(error)
         }
     }
     
-    private func saveItem() {
-        let newItem = ShoppingItem(
-            name: name.trimmingCharacters(in: .whitespacesAndNewlines),
+    /// Fetch lists with their item counts
+    public func fetchListsWithItemCounts() async throws -> [ShoppingListWithCount] {
+        do {
+            return try await database.reader.read { db in
+                let request = """
+                    SELECT 
+                        l.*,
+                        COUNT(i.id) as item_count,
+                        COUNT(CASE WHEN i.is_completed = 1 THEN 1 END) as completed_count
+                    FROM shopping_lists l
+                    LEFT JOIN shopping_items i ON l.id = i.shopping_list_id
+                    GROUP BY l.id
+                    ORDER BY l.updated_at DESC
+                    """
+                
+                return try ShoppingListWithCount.fetchAll(db, sql: request)
+            }
+        } catch {
+            throw RepositoryError.queryFailed(error)
+        }
+    }
+    
+    /// Create new list with timestamp
+    public func createList(title: String) async throws -> ShoppingList {
+        let now = Date()
+        let list = ShoppingList(
+            title: title,
+            createdAt: now,
+            updatedAt: now
+        )
+        return try await insert(list)
+    }
+    
+    /// Update list title and timestamp
+    public func updateTitle(listId: String, newTitle: String) async throws -> ShoppingList {
+        guard let existingList = try await fetch(id: listId) else {
+            throw RepositoryError.notFound(listId)
+        }
+        
+        let updatedList = ShoppingList(
+            id: existingList.id,
+            title: newTitle,
+            createdAt: existingList.createdAt,
+            updatedAt: Date()
+        )
+        
+        return try await update(updatedList)
+    }
+}
+
+// MARK: - Helper Types
+
+public struct ShoppingListWithCount: Codable, Identifiable {
+    public let id: String
+    public let title: String
+    public let createdAt: Date
+    public let updatedAt: Date
+    public let itemCount: Int
+    public let completedCount: Int
+    
+    public var completionPercentage: Double {
+        guard itemCount > 0 else { return 0 }
+        return Double(completedCount) / Double(itemCount)
+    }
+}
+
+// MARK: - GRDB Integration
+extension ShoppingListWithCount: FetchableRecord {
+    public init(row: Row) throws {
+        id = row["id"]
+        title = row["title"]
+        createdAt = Date(timeIntervalSince1970: row["created_at"])
+        updatedAt = Date(timeIntervalSince1970: row["updated_at"])
+        itemCount = row["item_count"]
+        completedCount = row["completed_count"]
+    }
+}
+```
+
+**✅ Completion Check:**
+- [ ] Shopping list repository extends base repository
+- [ ] Custom queries for business logic are implemented
+- [ ] Complex aggregations work (item counts)
+- [ ] Timestamp management is handled correctly
+
+---
+
+## 📚 Lesson 2.4: Shopping Item Repository
+
+### Task 4: Create ShoppingItemRepository
+
+**Location:** `Library/Sources/Models/ShoppingItemRepository.swift`
+
+```swift
+import Foundation
+import GRDB
+
+// MARK: - Shopping Item Repository
+public actor ShoppingItemRepository: RepositoryBase<ShoppingItem> {
+    
+    // MARK: - List-specific Operations
+    
+    /// Fetch all items for a specific shopping list
+    public func fetchItems(forListId listId: String) async throws -> [ShoppingItem] {
+        do {
+            return try await database.reader.read { db in
+                try ShoppingItem
+                    .filter(ShoppingItem.Columns.shoppingListId == listId)
+                    .order(ShoppingItem.Columns.createdAt.asc)
+                    .fetchAll(db)
+            }
+        } catch {
+            throw RepositoryError.queryFailed(error)
+        }
+    }
+    
+    /// Fetch items grouped by category for a list
+    public func fetchItemsGroupedByCategory(forListId listId: String) async throws -> [ItemWithCategory] {
+        do {
+            return try await database.reader.read { db in
+                let request = """
+                    SELECT 
+                        i.*,
+                        c.name as category_name,
+                        c.emoji as category_emoji,
+                        c.sort_order as category_sort_order
+                    FROM shopping_items i
+                    JOIN item_categories c ON i.category_id = c.id
+                    WHERE i.shopping_list_id = ?
+                    ORDER BY c.sort_order, i.created_at
+                    """
+                
+                return try ItemWithCategory.fetchAll(db, sql: request, arguments: [listId])
+            }
+        } catch {
+            throw RepositoryError.queryFailed(error)
+        }
+    }
+    
+    /// Create new item for a list
+    public func createItem(
+        name: String,
+        quantity: Int = 1,
+        notes: String = "",
+        categoryId: Int = 8, // Default to "Other"
+        shoppingListId: String
+    ) async throws -> ShoppingItem {
+        let now = Date()
+        let item = ShoppingItem(
+            name: name,
             quantity: quantity,
-            notes: notes.trimmingCharacters(in: .whitespacesAndNewlines),
-            category: category
+            isCompleted: false,
+            notes: notes,
+            categoryId: categoryId,
+            shoppingListId: shoppingListId,
+            createdAt: now,
+            updatedAt: now
         )
-        onSave(newItem)
-        dismiss()
-    }
-}
-
-struct EditItemView: View {
-    @Binding var item: ShoppingItem
-    @Environment(\\.dismiss) private var dismiss
-    
-    @State private var name: String
-    @State private var quantity: Int
-    @State private var category: ItemCategory
-    @State private var notes: String
-    
-    init(item: Binding<ShoppingItem>) {
-        self._item = item
-        self._name = State(initialValue: item.wrappedValue.name)
-        self._quantity = State(initialValue: item.wrappedValue.quantity)
-        self._category = State(initialValue: item.wrappedValue.category)
-        self._notes = State(initialValue: item.wrappedValue.notes)
+        
+        return try await insert(item)
     }
     
-    var body: some View {
-        NavigationView {
-            Form {
-                Section("Item Details") {
-                    TextField("Item name", text: $name)
-                        .textInputAutocapitalization(.words)
-                    
-                    Stepper("Quantity: \\(quantity)", value: $quantity, in: 1...99)
-                    
-                    Picker("Category", selection: $category) {
-                        ForEach(ItemCategory.allCases, id: \\.self) { category in
-                            HStack {
-                                Text(category.emoji)
-                                Text(category.rawValue)
-                            }
-                            .tag(category)
-                        }
-                    }
-                }
-                
-                Section("Notes") {
-                    TextField("Add notes (optional)", text: $notes, axis: .vertical)
-                        .lineLimit(3, reservesSpace: true)
-                }
+    /// Toggle item completion status
+    public func toggleCompletion(itemId: String) async throws -> ShoppingItem {
+        guard let existingItem = try await fetch(id: itemId) else {
+            throw RepositoryError.notFound(itemId)
+        }
+        
+        let updatedItem = ShoppingItem(
+            id: existingItem.id,
+            name: existingItem.name,
+            quantity: existingItem.quantity,
+            isCompleted: !existingItem.isCompleted,
+            notes: existingItem.notes,
+            categoryId: existingItem.categoryId,
+            shoppingListId: existingItem.shoppingListId,
+            createdAt: existingItem.createdAt,
+            updatedAt: Date()
+        )
+        
+        return try await update(updatedItem)
+    }
+    
+    /// Delete all completed items from a list
+    public func deleteCompletedItems(forListId listId: String) async throws {
+        do {
+            _ = try await database.writer.write { db in
+                try ShoppingItem
+                    .filter(ShoppingItem.Columns.shoppingListId == listId)
+                    .filter(ShoppingItem.Columns.isCompleted == true)
+                    .deleteAll(db)
             }
-            .navigationTitle("Edit Item")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
-                        dismiss()
-                    }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
-                        saveChanges()
-                    }
-                    .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                }
-            }
+        } catch {
+            throw RepositoryError.deleteFailed(error)
         }
     }
     
-    private func saveChanges() {
-        item.name = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        item.quantity = quantity
-        item.category = category
-        item.notes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
-        item.updatedAt = Date()
-        dismiss()
+    /// Update item details
+    public func updateItem(
+        itemId: String,
+        name: String,
+        quantity: Int,
+        notes: String,
+        categoryId: Int
+    ) async throws -> ShoppingItem {
+        guard let existingItem = try await fetch(id: itemId) else {
+            throw RepositoryError.notFound(itemId)
+        }
+        
+        let updatedItem = ShoppingItem(
+            id: existingItem.id,
+            name: name,
+            quantity: quantity,
+            isCompleted: existingItem.isCompleted,
+            notes: notes,
+            categoryId: categoryId,
+            shoppingListId: existingItem.shoppingListId,
+            createdAt: existingItem.createdAt,
+            updatedAt: Date()
+        )
+        
+        return try await update(updatedItem)
     }
 }
 
-#Preview("Add Item") {
-    AddItemView { item in
-        print("New item: \\(item.name)")
+// MARK: - Helper Types
+
+public struct ItemWithCategory: Codable, Identifiable {
+    public let id: String
+    public let name: String
+    public let quantity: Int
+    public let isCompleted: Bool
+    public let notes: String
+    public let categoryId: Int
+    public let shoppingListId: String
+    public let createdAt: Date
+    public let updatedAt: Date
+    
+    // Category info
+    public let categoryName: String
+    public let categoryEmoji: String
+    public let categorySortOrder: Int
+    
+    public var displayName: String {
+        quantity > 1 ? "\(quantity)x \(name)" : name
     }
 }
 
-#Preview("Edit Item") {
-    EditItemView(item: .constant(SampleData.sampleItems[0]))
+// MARK: - GRDB Integration
+extension ItemWithCategory: FetchableRecord {
+    public init(row: Row) throws {
+        id = row["id"]
+        name = row["name"]
+        quantity = row["quantity"]
+        isCompleted = row["is_completed"]
+        notes = row["notes"]
+        categoryId = row["category_id"]
+        shoppingListId = row["shopping_list_id"]
+        createdAt = Date(timeIntervalSince1970: row["created_at"])
+        updatedAt = Date(timeIntervalSince1970: row["updated_at"])
+        
+        categoryName = row["category_name"]
+        categoryEmoji = row["category_emoji"]
+        categorySortOrder = row["category_sort_order"]
+    }
 }
 ```
 
 **✅ Completion Check:**
-- [ ] Can add new items with all fields
-- [ ] Can edit existing items
-- [ ] Form validation works
-- [ ] Quantity stepper functions correctly
+- [ ] Item repository with list-specific operations
+- [ ] Complex JOIN queries work correctly
+- [ ] Business logic operations (toggle, update) implemented
+- [ ] Helper types for enhanced data are created
 
 ---
 
-## 📚 Lesson 2.7: Placeholder View
+## 📚 Lesson 2.5: Category Repository
 
-### Task 7: Create PlaceholderView
+### Task 5: Create CategoryRepository
 
-**Location:** `Library/Sources/AppFeature/PlaceholderView.swift`
+**Location:** `Library/Sources/Models/CategoryRepository.swift`
 
 ```swift
-import SwiftUI
+import Foundation
+import GRDB
 
-struct PlaceholderView: View {
-    var body: some View {
-        VStack(spacing: 20) {
-            Image(systemName: "list.clipboard")
-                .font(.system(size: 80))
-                .foregroundColor(.secondary)
-            
-            VStack(spacing: 8) {
-                Text("Select a List")
-                    .font(.title2)
-                    .fontWeight(.medium)
-                
-                Text("Choose a shopping list from the sidebar to view its items")
-                    .font(.body)
-                    .foregroundColor(.secondary)
-                    .multilineTextAlignment(.center)
+// MARK: - Category Repository
+public actor CategoryRepository: RepositoryBase<ItemCategory> {
+    
+    /// Fetch all categories ordered by sort order
+    public func fetchAllOrdered() async throws -> [ItemCategory] {
+        do {
+            return try await database.reader.read { db in
+                try ItemCategory
+                    .order(ItemCategory.Columns.sortOrder.asc)
+                    .fetchAll(db)
             }
+        } catch {
+            throw RepositoryError.queryFailed(error)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(.systemGroupedBackground))
+    }
+    
+    /// Fetch category by name
+    public func fetchCategory(byName name: String) async throws -> ItemCategory? {
+        do {
+            return try await database.reader.read { db in
+                try ItemCategory
+                    .filter(ItemCategory.Columns.name == name)
+                    .fetchOne(db)
+            }
+        } catch {
+            throw RepositoryError.queryFailed(error)
+        }
+    }
+    
+    /// Get category statistics for a specific list
+    public func fetchCategoryStats(forListId listId: String) async throws -> [CategoryStats] {
+        do {
+            return try await database.reader.read { db in
+                let request = """
+                    SELECT 
+                        c.id,
+                        c.name,
+                        c.emoji,
+                        c.sort_order,
+                        COUNT(i.id) as item_count,
+                        COUNT(CASE WHEN i.is_completed = 1 THEN 1 END) as completed_count
+                    FROM item_categories c
+                    LEFT JOIN shopping_items i ON c.id = i.category_id AND i.shopping_list_id = ?
+                    GROUP BY c.id, c.name, c.emoji, c.sort_order
+                    HAVING item_count > 0
+                    ORDER BY c.sort_order
+                    """
+                
+                return try CategoryStats.fetchAll(db, sql: request, arguments: [listId])
+            }
+        } catch {
+            throw RepositoryError.queryFailed(error)
+        }
     }
 }
 
-#Preview {
-    PlaceholderView()
+// MARK: - Category Statistics
+
+public struct CategoryStats: Codable, Identifiable {
+    public let id: Int
+    public let name: String
+    public let emoji: String
+    public let sortOrder: Int
+    public let itemCount: Int
+    public let completedCount: Int
+    
+    public var completionPercentage: Double {
+        guard itemCount > 0 else { return 0 }
+        return Double(completedCount) / Double(itemCount)
+    }
+    
+    public var pendingCount: Int {
+        itemCount - completedCount
+    }
+}
+
+// MARK: - GRDB Integration
+extension CategoryStats: FetchableRecord {
+    public init(row: Row) throws {
+        id = row["id"]
+        name = row["name"]
+        emoji = row["emoji"]
+        sortOrder = row["sort_order"]
+        itemCount = row["item_count"]
+        completedCount = row["completed_count"]
+    }
 }
 ```
 
+**✅ Completion Check:**
+- [ ] Category repository with statistics queries
+- [ ] Category-based analytics implemented
+- [ ] Complex aggregation queries work
+- [ ] Helper types for category statistics
+
 ---
 
-## 🧪 Testing Your UI
+## 🧪 Testing Repository Layer
 
-### Task 8: Test All Components
+### Task 6: Create Repository Tests
 
-Run your app and test:
-
-1. **Navigation**: 
-   - [ ] Can select lists from sidebar
-   - [ ] Detail view updates when selecting different lists
-
-2. **List Management**:
-   - [ ] Can create new lists
-   - [ ] Templates work
-   - [ ] Can delete lists
-
-3. **Item Management**:
-   - [ ] Can add items to lists
-   - [ ] Can edit existing items
-   - [ ] Can toggle completion
-   - [ ] Can delete items
-   - [ ] Search works
-
-4. **Visual Polish**:
-   - [ ] Categories group items correctly
-   - [ ] Progress bars show completion
-   - [ ] Swipe actions work
-   - [ ] Empty states display properly
-
-### Create UI Tests
-
-**Location:** `Library/Tests/LibraryTests/UIComponentTests.swift`
+**Location:** `Library/Tests/LibraryTests/RepositoryTests.swift`
 
 ```swift
 import XCTest
-import SwiftUI
-@testable import AppFeature
+import GRDB
 @testable import Models
 
-final class UIComponentTests: XCTestCase {
-    func testItemRowToggle() {
-        var item = ShoppingItem(name: "Test Item")
+final class RepositoryTests: XCTestCase {
+    var database: DatabaseManager!
+    var shoppingListRepo: ShoppingListRepository!
+    var shoppingItemRepo: ShoppingItemRepository!
+    var categoryRepo: CategoryRepository!
+    
+    override func setUp() async throws {
+        try await super.setUp()
         
-        XCTAssertFalse(item.isCompleted)
-        item.toggle()
-        XCTAssertTrue(item.isCompleted)
+        // Use in-memory database for tests
+        database = try DatabaseManager()
+        shoppingListRepo = ShoppingListRepository(database: database)
+        shoppingItemRepo = ShoppingItemRepository(database: database)
+        categoryRepo = CategoryRepository(database: database)
     }
     
-    func testListCompletion() {
-        var list = ShoppingList(title: "Test")
-        list.addItem(ShoppingItem(name: "Item 1"))
-        list.addItem(ShoppingItem(name: "Item 2"))
+    func testShoppingListCRUD() async throws {
+        // Create
+        let list = try await shoppingListRepo.createList(title: "Test List")
+        XCTAssertEqual(list.title, "Test List")
+        XCTAssertFalse(list.id.isEmpty)
         
-        XCTAssertEqual(list.completionPercentage, 0.0)
+        // Read
+        let fetchedList = try await shoppingListRepo.fetch(id: list.id)
+        XCTAssertNotNil(fetchedList)
+        XCTAssertEqual(fetchedList?.title, "Test List")
         
-        list.items[0].toggle()
-        XCTAssertEqual(list.completionPercentage, 0.5)
+        // Update
+        let updatedList = try await shoppingListRepo.updateTitle(
+            listId: list.id,
+            newTitle: "Updated List"
+        )
+        XCTAssertEqual(updatedList.title, "Updated List")
         
-        list.items[1].toggle()
-        XCTAssertEqual(list.completionPercentage, 1.0)
+        // Delete
+        try await shoppingListRepo.delete(id: list.id)
+        let deletedList = try await shoppingListRepo.fetch(id: list.id)
+        XCTAssertNil(deletedList)
+    }
+    
+    func testShoppingItemOperations() async throws {
+        // First create a list
+        let list = try await shoppingListRepo.createList(title: "Test List")
+        
+        // Create item
+        let item = try await shoppingItemRepo.createItem(
+            name: "Test Item",
+            quantity: 2,
+            shoppingListId: list.id
+        )
+        XCTAssertEqual(item.name, "Test Item")
+        XCTAssertEqual(item.quantity, 2)
+        XCTAssertFalse(item.isCompleted)
+        
+        // Toggle completion
+        let toggledItem = try await shoppingItemRepo.toggleCompletion(itemId: item.id)
+        XCTAssertTrue(toggledItem.isCompleted)
+        
+        // Fetch items for list
+        let items = try await shoppingItemRepo.fetchItems(forListId: list.id)
+        XCTAssertEqual(items.count, 1)
+        XCTAssertEqual(items.first?.name, "Test Item")
+    }
+    
+    func testListWithItemCounts() async throws {
+        let list = try await shoppingListRepo.createList(title: "Test List")
+        
+        // Add some items
+        _ = try await shoppingItemRepo.createItem(name: "Item 1", shoppingListId: list.id)
+        let item2 = try await shoppingItemRepo.createItem(name: "Item 2", shoppingListId: list.id)
+        
+        // Complete one item
+        _ = try await shoppingItemRepo.toggleCompletion(itemId: item2.id)
+        
+        // Fetch lists with counts
+        let listsWithCounts = try await shoppingListRepo.fetchListsWithItemCounts()
+        XCTAssertEqual(listsWithCounts.count, 1)
+        
+        let listWithCount = listsWithCounts.first!
+        XCTAssertEqual(listWithCount.itemCount, 2)
+        XCTAssertEqual(listWithCount.completedCount, 1)
+        XCTAssertEqual(listWithCount.completionPercentage, 0.5)
+    }
+    
+    func testCategoryQueries() async throws {
+        // Categories should be populated from migration
+        let categories = try await categoryRepo.fetchAllOrdered()
+        XCTAssertEqual(categories.count, 8)
+        
+        // First category should be "Produce"
+        let produce = categories.first
+        XCTAssertEqual(produce?.name, "Produce")
+        XCTAssertEqual(produce?.emoji, "🥬")
+    }
+    
+    func testComplexJoinQuery() async throws {
+        let list = try await shoppingListRepo.createList(title: "Test List")
+        
+        // Create item with specific category (Produce = 1)
+        _ = try await shoppingItemRepo.createItem(
+            name: "Bananas",
+            categoryId: 1,
+            shoppingListId: list.id
+        )
+        
+        // Fetch items with category info
+        let itemsWithCategory = try await shoppingItemRepo.fetchItemsGroupedByCategory(forListId: list.id)
+        XCTAssertEqual(itemsWithCategory.count, 1)
+        
+        let item = itemsWithCategory.first!
+        XCTAssertEqual(item.name, "Bananas")
+        XCTAssertEqual(item.categoryName, "Produce")
+        XCTAssertEqual(item.categoryEmoji, "🥬")
     }
 }
 ```
+
+Run your repository tests:
+```bash
+xcodebuild test -scheme Library -destination 'platform=iOS Simulator,name=iPhone 15'
+```
+
+**✅ Completion Check:**
+- [ ] All repository tests pass
+- [ ] CRUD operations work correctly
+- [ ] Complex queries and joins are tested
+- [ ] Error handling is validated
 
 ---
 
@@ -871,28 +816,41 @@ final class UIComponentTests: XCTestCase {
 
 Before moving to Chapter 3, ensure:
 
-- [ ] ✅ All UI components compile and run
-- [ ] ✅ Navigation works between master/detail
-- [ ] ✅ Can perform full CRUD operations on lists and items
-- [ ] ✅ Search and filtering works
-- [ ] ✅ Categories display correctly with emojis
-- [ ] ✅ Empty states provide good UX
-- [ ] ✅ All SwiftUI previews work
-- [ ] ✅ No runtime crashes or warnings
+- [ ] ✅ GRDB database manager is properly configured
+- [ ] ✅ Generic repository base pattern implemented
+- [ ] ✅ Shopping list repository with custom queries
+- [ ] ✅ Shopping item repository with business logic
+- [ ] ✅ Category repository with statistics
+- [ ] ✅ All repository tests passing
+- [ ] ✅ Error handling covers all scenarios
+- [ ] ✅ Async/await patterns correctly implemented
 
 ### What You've Built
 
-🎊 **Amazing progress!** You now have:
+🎊 **Geweldig werk!** Je hebt nu:
 
-- **Complete UI**: All core screens and components
-- **Full Functionality**: CRUD operations for lists and items  
-- **Great UX**: Search, categories, empty states, swipe actions
-- **Modern SwiftUI**: Navigation, sheets, forms, proper state management
+- **Type-Safe Repository Layer**: Veilige database toegang met compile-time checks
+- **Modern Async/Await**: All database operations zijn async voor betere performance
+- **Business Logic Separation**: Repository handles data, UI handles presentation
+- **Comprehensive Error Handling**: Graceful handling van database errors
+- **Complex Query Support**: JOINs, aggregations, and custom SQL queries
+- **Actor-Based Thread Safety**: Modern Swift concurrency voor database access
+- **Point-Free Architecture**: Clean separation tussen data en business logic
+
+### Key Learnings
+
+📚 **Je hebt geleerd:**
+- GRDB setup en configuration voor production apps
+- Repository pattern implementation met Swift generics
+- Complex SQL queries met type-safe Swift integration
+- Modern Swift concurrency patterns (async/await, actors)
+- Database observation setup voor reactive programming
+- Test-driven development voor database layers
 
 ### Next Steps
 
-Ready for **Chapter 3: Local Storage**? You'll add persistent data storage with SwiftData!
+Ready for **Chapter 3: Type-Safe Queries & UI Binding**? Je gaat nu StructuredQueries gebruiken en reactive UI bouwen!
 
 ---
 
-**🤔 Questions?** Test everything thoroughly and ask Claude Code if you run into issues!
+**🤔 Vragen over repository patterns?** Test je queries thoroughly en vraag Claude Code om hulp bij complex SQL!

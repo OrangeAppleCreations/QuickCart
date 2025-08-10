@@ -1,124 +1,141 @@
 # 📱 QuickCart Development Guide
 
-*Je complete roadmap van idea naar App Store*
+*Je complete roadmap naar moderne persistence met Point-Free architectuur*
 
 ---
 
 ## 🎯 Over Deze Guide
 
-Deze guide leidt je stap-voor-stap door de development van QuickCart - van basis data models tot geavanceerde collaboration features. Elke "les" heeft concrete taken, code voorbeelden en completion criteria.
+Deze guide leidt je stap-voor-stap door de development van QuickCart met **moderne persistence patterns**. Gebaseerd op Point-Free's revolutionaire aanpak voor SQL-first development, bouw je een robuuste, type-veilige en cross-platform shopping app.
 
 **Geschat tijdsbestek:** 3-6 maanden (afhankelijk van je tempo)
 
----
-
-## 📚 DEEL I: FOUNDATION (Weeks 1-6)
-*"Maak een werkende single-user boodschappenlijst app"*
-
-### Chapter 1: Data Models Setup ⏱️ Week 1
-**🎯 Goal:** Definieer je core data structuur
-- [ ] Create `ShoppingItem` model
-- [ ] Create `ShoppingList` model  
-- [ ] Setup model validation
-- [ ] Create sample data
-- [ ] Write unit tests for models
-
-### Chapter 2: Core UI Components ⏱️ Week 2
-**🎯 Goal:** Bouw herbruikbare UI componenten
-- [ ] Design `ItemRow` component
-- [ ] Create `AddItemView` 
-- [ ] Build `ListDetailView`
-- [ ] Setup navigation structure
-- [ ] Implement basic item CRUD
-
-### Chapter 3: Local Storage ⏱️ Week 3
-**🎯 Goal:** Maak data persistent met SwiftData
-- [ ] Setup SwiftData container
-- [ ] Implement data persistence
-- [ ] Add data migration support
-- [ ] Create repository pattern
-- [ ] Test offline functionality
-
-### Chapter 4: Single User Polish ⏱️ Weeks 4-6
-**🎯 Goal:** Polish de single-user experience
-- [ ] Add item categories
-- [ ] Implement search & filter
-- [ ] Create list templates
-- [ ] Add item notes/descriptions
-- [ ] Polish UI/UX
-- [ ] Comprehensive testing
-
-**🎉 Milestone 1:** Je hebt een volledig werkende boodschappenlijst app!
+**🌟 Waarom deze aanpak?**
+- **Type-veilige SQL queries** - Geen runtime crashes meer
+- **Directe SQLite controle** - De database is je enige bron van waarheid  
+- **Cross-platform ready** - Dezelfde code werkt op iOS, macOS, Linux
+- **Excellent testability** - Pure value types en functionele patterns
+- **Real-time reactivity** - UI updates automatisch met database changes
 
 ---
 
-## 🤝 DEEL II: COLLABORATION (Weeks 7-12)
-*"Maak lijsten deelbaar tussen gebruikers"*
+## 🏗️ DEEL I: MODERNE PERSISTENCE FOUNDATION (Weeks 1-6)
+*"Bouw een solide SQL-first fundament"*
 
-### Chapter 5: User Management ⏱️ Week 7
-**🎯 Goal:** Implementeer gebruikers systeem
-- [ ] Create `User` model
-- [ ] Setup authentication (Sign in with Apple)
-- [ ] Create user profile management
-- [ ] Implement user preferences
-- [ ] Add avatar/profile pictures
+### Chapter 1: SQL Schema & Value Types ⏱️ Week 1
+**🎯 Goal:** Definieer je database schema met Swift value types
+- [ ] Design SQLite database schema
+- [ ] Create Swift value type models
+- [ ] Setup GRDB dependency
+- [ ] Implement schema migrations
+- [ ] Create sample data factory
+- [ ] Write comprehensive model tests
 
-### Chapter 6: CloudKit Integration ⏱️ Weeks 8-9
-**🎯 Goal:** Sync data naar de cloud
-- [ ] Setup CloudKit container
-- [ ] Configure CloudKit schema
-- [ ] Implement CloudKit CRUD operations
-- [ ] Handle network connectivity
-- [ ] Add sync status indicators
+### Chapter 2: GRDB Repository Pattern ⏱️ Week 2
+**🎯 Goal:** Implementeer type-veilige database toegang
+- [ ] Setup GRDB database connection
+- [ ] Create repository layer
+- [ ] Implement CRUD operations
+- [ ] Add database connection pooling
+- [ ] Setup error handling
+- [ ] Create repository tests
 
-### Chapter 7: Real-time Synchronization ⏱️ Week 10
-**🎯 Goal:** Live updates tussen devices
-- [ ] Implement CloudKit subscriptions
-- [ ] Handle remote notifications
-- [ ] Add real-time UI updates
-- [ ] Show "typing indicators"
-- [ ] Handle user presence
+### Chapter 3: Type-Safe Queries & UI Binding ⏱️ Week 3
+**🎯 Goal:** Bouw reactive UI met StructuredQueries
+- [ ] Setup StructuredQueries library
+- [ ] Create type-safe query builders
+- [ ] Implement `@FetchAll` property wrapper
+- [ ] Connect queries to SwiftUI views
+- [ ] Add real-time database observation
+- [ ] Test query performance
 
-### Chapter 8: Conflict Resolution ⏱️ Weeks 11-12
-**🎯 Goal:** Handle concurrent edits gracefully
-- [ ] Implement conflict detection
-- [ ] Create merge strategies
-- [ ] Add version control
-- [ ] Handle offline conflicts
-- [ ] Test edge cases
+### Chapter 4: SQL Triggers & Validatie ⏱️ Weeks 4-6
+**🎯 Goal:** Implementeer business logic in de database
+- [ ] Create SQL triggers for timestamps
+- [ ] Add validation triggers
+- [ ] Implement business rules in SQL
+- [ ] Setup trigger error handling
+- [ ] Add advanced aggregation queries
+- [ ] Test data integrity rules
 
-**🎉 Milestone 2:** Je hebt een volledig werkende collaborative shopping app!
+**🎉 Milestone 1:** Je hebt een moderne, SQL-first shopping app met type-veilige queries!
 
 ---
 
-## 🚀 DEEL III: ADVANCED FEATURES (Weeks 13+)
-*"Maak je app outstanding"*
+## ⚡ DEEL II: GEAVANCEERDE PERSISTENCE (Weeks 7-12)
+*"Master advanced SQL patterns en real-time updates"*
 
-### Chapter 9: Smart Features ⏱️ Weeks 13-16
-**🎯 Goal:** AI en machine learning features
-- [ ] Implement purchase history
-- [ ] Add smart suggestions
-- [ ] Create auto-categorization
-- [ ] Build predictive features
-- [ ] Add barcode scanning
+### Chapter 5: Advanced Aggregations & Joins ⏱️ Week 7
+**🎯 Goal:** Complexe SQL queries voor business intelligence
+- [ ] Multi-table JOIN queries
+- [ ] Advanced GROUP BY aggregations
+- [ ] Statistical queries (averages, counts)
+- [ ] Category-based analytics
+- [ ] Performance optimization
+- [ ] Query caching strategies
 
-### Chapter 10: Analytics & Insights ⏱️ Weeks 17-20
-**🎯 Goal:** Geef gebruikers inzicht in hun data
-- [ ] Create budget tracking
-- [ ] Build spending analytics
-- [ ] Add nutrition insights
-- [ ] Implement waste tracking
-- [ ] Create beautiful charts
+### Chapter 6: Real-time Updates & Change Tracking ⏱️ Weeks 8-9
+**🎯 Goal:** Live UI updates via database observation
+- [ ] Setup GRDB observation patterns
+- [ ] Implement change tracking
+- [ ] Create reactive UI components
+- [ ] Handle concurrent updates
+- [ ] Add change conflict resolution
+- [ ] Test real-time scenarios
 
-### Chapter 11: Integrations ⏱️ Weeks 21-24
-**🎯 Goal:** Verbind met externe services
-- [ ] Recipe integration
-- [ ] Calendar sync
-- [ ] Location services
-- [ ] Siri Shortcuts
-- [ ] Apple Watch app
+### Chapter 7: Database Triggers & Callbacks ⏱️ Week 10
+**🎯 Goal:** Advanced trigger patterns voor data consistency
+- [ ] Type-safe trigger creation
+- [ ] Validation trigger patterns
+- [ ] Advanced callback mechanisms
+- [ ] Cross-table integrity checks
+- [ ] Performance monitoring
+- [ ] Trigger testing strategies
 
-**🎉 Milestone 3:** Je hebt een App Store-ready product!
+### Chapter 8: Migration & Schema Evolution ⏱️ Weeks 11-12
+**🎯 Goal:** Veilige database schema evolutie
+- [ ] Advanced migration patterns
+- [ ] Backwards compatibility
+- [ ] Data transformation scripts
+- [ ] Migration testing
+- [ ] Rollback strategies
+- [ ] Production deployment
+
+**🎉 Milestone 2:** Je hebt een production-ready persistence layer met advanced SQL features!
+
+---
+
+## 🚀 DEEL III: PRODUCTION FEATURES (Weeks 13+)
+*"Schaal naar production met CloudKit sync"*
+
+### Chapter 9: CloudKit Synchronization ⏱️ Weeks 13-16
+**🎯 Goal:** Seamless cloud sync met Point-Free patterns
+- [ ] SQLite + CloudKit integration
+- [ ] Conflict resolution strategies
+- [ ] Offline-first synchronization
+- [ ] Multi-device data consistency
+- [ ] Sync status indicators
+- [ ] Cloud sync testing
+
+### Chapter 10: Performance & Optimization ⏱️ Weeks 17-20
+**🎯 Goal:** Optimaliseer voor productie gebruik
+- [ ] Query performance analysis
+- [ ] Database indexing strategies
+- [ ] Memory optimization
+- [ ] Background processing
+- [ ] Batch operations
+- [ ] Performance monitoring
+
+### Chapter 11: Advanced SQL Patterns ⏱️ Weeks 21-24
+**🎯 Goal:** Master-level SQL technieken
+- [ ] Window functions
+- [ ] Common Table Expressions (CTEs)
+- [ ] Recursive queries
+- [ ] Full-text search
+- [ ] JSON column support
+- [ ] Advanced analytics
+
+**🎉 Milestone 3:** Je hebt een enterprise-level app met moderne persistence architectuur!
 
 ---
 
@@ -127,12 +144,12 @@ Deze guide leidt je stap-voor-stap door de development van QuickCart - van basis
 ### Week Planning Format:
 ```
 Week X: Chapter Y - [Chapter Name]
-Monday:     Read chapter, setup environment
-Tuesday:    Complete tasks 1-2  
-Wednesday:  Complete tasks 3-4
-Thursday:   Complete remaining tasks
-Friday:     Testing & polish
-Weekend:    Review & prepare for next week
+Monday:     Read chapter, setup dependencies & database schema
+Tuesday:    Implement core models & repository patterns  
+Wednesday:  Build type-safe queries & UI binding
+Thursday:   Add SQL triggers & validation logic
+Friday:     Testing, performance & polish
+Weekend:    Review SQL patterns & prepare for next week
 ```
 
 ---
@@ -140,17 +157,24 @@ Weekend:    Review & prepare for next week
 ## 🧰 Prerequisites & Setup
 
 ### Before You Start:
-- [ ] Xcode 15+ installed
-- [ ] Apple Developer Account (for CloudKit)
-- [ ] Basic SwiftUI knowledge
+- [ ] Xcode 15+ installed  
+- [ ] Basic Swift & SwiftUI knowledge
+- [ ] Basic SQL understanding (beginner-friendly)
 - [ ] Git setup (✅ already done)
 
-### Tools You'll Use:
-- **Xcode** - Primary IDE
-- **SwiftData** - Local persistence  
-- **CloudKit** - Cloud sync
-- **TestFlight** - Beta testing
-- **GitHub** - Version control (✅ already setup)
+### Libraries Je Gaat Gebruiken:
+- **GRDB.swift** - Modern SQLite framework
+- **StructuredQueries** - Type-safe SQL query builder
+- **SharingGRDB** - Reactive database observations
+- **SwiftUI** - Modern declarative UI
+- **CloudKit** - Cloud synchronization (later chapters)
+
+### Waarom Deze Tech Stack?
+- **GRDB**: Battle-tested SQLite wrapper met excellent performance
+- **StructuredQueries**: Compile-time SQL safety, geen runtime crashes
+- **Type-Safe**: Alle queries worden gevalideerd tijdens build time
+- **Cross-Platform**: Werkt op alle Swift platforms (iOS, macOS, Linux)
+- **Point-Free Proven**: Gebruikt in productie apps van Point-Free
 
 ---
 
@@ -158,26 +182,48 @@ Weekend:    Review & prepare for next week
 
 Track your progress with each chapter:
 
-- [ ] **Chapter 1** - Data Models _(Week 1)_
-- [ ] **Chapter 2** - Core UI _(Week 2)_  
-- [ ] **Chapter 3** - Local Storage _(Week 3)_
-- [ ] **Chapter 4** - Single User Polish _(Weeks 4-6)_
-- [ ] **Chapter 5** - User Management _(Week 7)_
-- [ ] **Chapter 6** - CloudKit Integration _(Weeks 8-9)_
-- [ ] **Chapter 7** - Real-time Sync _(Week 10)_
-- [ ] **Chapter 8** - Conflict Resolution _(Weeks 11-12)_
-- [ ] **Chapter 9** - Smart Features _(Weeks 13-16)_
-- [ ] **Chapter 10** - Analytics & Insights _(Weeks 17-20)_
-- [ ] **Chapter 11** - Integrations _(Weeks 21-24)_
+### 🏗️ FOUNDATION
+- [ ] **Chapter 1** - SQL Schema & Value Types _(Week 1)_
+- [ ] **Chapter 2** - GRDB Repository Pattern _(Week 2)_  
+- [ ] **Chapter 3** - Type-Safe Queries & UI _(Week 3)_
+- [ ] **Chapter 4** - SQL Triggers & Validatie _(Weeks 4-6)_
+
+### ⚡ ADVANCED PERSISTENCE  
+- [ ] **Chapter 5** - Advanced Aggregations _(Week 7)_
+- [ ] **Chapter 6** - Real-time Updates _(Weeks 8-9)_
+- [ ] **Chapter 7** - Database Triggers _(Week 10)_
+- [ ] **Chapter 8** - Migration & Evolution _(Weeks 11-12)_
+
+### 🚀 PRODUCTION FEATURES
+- [ ] **Chapter 9** - CloudKit Sync _(Weeks 13-16)_
+- [ ] **Chapter 10** - Performance & Optimization _(Weeks 17-20)_
+- [ ] **Chapter 11** - Advanced SQL Patterns _(Weeks 21-24)_
 
 ---
 
 ## 🎓 Next Steps
 
-1. **Start with Chapter 1** - Data Models Setup
-2. **Don't skip ahead** - Each chapter builds on the previous
-3. **Test everything** - Use the provided checklists
-4. **Ask for help** - Use Claude Code when stuck
-5. **Celebrate milestones** - You're building something amazing!
+1. **Start with Chapter 1** - SQL Schema & Value Types
+2. **Follow the Point-Free philosophy** - Database as single source of truth
+3. **Master each SQL pattern** - Don't skip the fundamentals
+4. **Test thoroughly** - Use provided SQL tests and UI validation
+5. **Ask for help** - Use Claude Code for complex SQL queries
+6. **Celebrate milestones** - You're mastering modern persistence!
 
-**Ready to start? Let's begin with Chapter 1! 🚀**
+**🌟 Ready to revolutionize your Swift persistence? Let's begin with Chapter 1! 🚀**
+
+---
+
+## 💡 Point-Free Philosophy
+
+Deze guide volgt de **Point-Free modern persistence philosophy**:
+
+> *"SQLite is the true arbiter of the data in our application"*  
+> *"We get to leverage all of the powers of SQL, and let it shine, while also being able to leverage the powers of SwiftUI"*
+
+**Core Principles:**
+- 🎯 **Database-First Design** - Schema definieert je app structuur
+- ⚡ **Type-Safe Queries** - Compiler catches SQL errors before runtime  
+- 🔄 **Reactive UI** - SwiftUI updates automatisch met database changes
+- 🏗️ **Value Types** - Pure structs voor betere testability
+- 🛡️ **SQL Triggers** - Business logic in de database voor consistency

@@ -1,444 +1,565 @@
-# Chapter 3: Local Storage
+# Chapter 3: Type-Safe Queries & UI Binding
 
 **⏱️ Estimated Time:** 1 Week  
-**🎯 Learning Objective:** Add persistent data storage using SwiftData
+**🎯 Learning Objective:** Bouw reactive UI met type-safe SQL queries via StructuredQueries & SharingGRDB
 
 ---
 
 ## 📋 Prerequisites
 
 Before starting this chapter:
-- [ ] ✅ Chapter 2 completed - UI components working
-- [ ] ✅ All UI functionality tested
-- [ ] ✅ Understanding of @State and @Binding
-- [ ] ✅ Xcode 15+ (for SwiftData support)
+- [ ] ✅ Chapter 2 completed - Repository pattern working
+- [ ] ✅ All repository tests passing
+- [ ] ✅ Understanding van GRDB basics
+- [ ] ✅ Basic SwiftUI knowledge
 
 ---
 
 ## 🎯 Chapter Goals
 
 By the end of this chapter, you will have:
-- ✅ SwiftData models replacing your structs
-- ✅ Persistent storage that survives app restarts
-- ✅ Repository pattern for data operations
-- ✅ Proper data migration handling
-- ✅ Offline-first functionality
-- ✅ Error handling for storage operations
+- ✅ StructuredQueries library geïntegreerd voor type-safe SQL
+- ✅ @FetchAll property wrapper voor reactive UI updates
+- ✅ Type-safe query composition voor complex database operations
+- ✅ SwiftUI views die automatisch updaten met database changes
+- ✅ Advanced query patterns voor search en filtering
+- ✅ Performance-optimized database observations
+
+**🌟 Point-Free Principle:** *"Build type-safe queries that compile to efficient SQL and drive reactive UI updates"*
 
 ---
 
-## 📚 Lesson 3.1: SwiftData Setup
+## 📚 Lesson 3.1: StructuredQueries Setup
 
-### Task 1: Create SwiftData Models
+### Task 1: Add StructuredQueries Dependencies
 
-**Location:** `Library/Sources/Models/SwiftDataModels.swift`
+**Location:** `Library/Package.swift`
+
+Update je package dependencies:
 
 ```swift
-import SwiftData
-import Foundation
+// swift-tools-version: 5.9
+import PackageDescription
 
-@Model
-public final class ShoppingItemEntity {
-    public var id: UUID
-    public var name: String
-    public var quantity: Int
-    public var isCompleted: Bool
-    public var notes: String
-    public var category: String // Store as String for SwiftData compatibility
-    public var createdAt: Date
-    public var updatedAt: Date
-    
-    // Relationship to parent list
-    public var shoppingList: ShoppingListEntity?
-    
-    public init(
-        id: UUID = UUID(),
-        name: String,
-        quantity: Int = 1,
-        isCompleted: Bool = false,
-        notes: String = "",
-        category: ItemCategory = .other,
-        createdAt: Date = Date(),
-        updatedAt: Date = Date()
-    ) {
-        self.id = id
-        self.name = name
-        self.quantity = quantity
-        self.isCompleted = isCompleted
-        self.notes = notes
-        self.category = category.rawValue
-        self.createdAt = createdAt
-        self.updatedAt = updatedAt
-    }
-}
-
-@Model
-public final class ShoppingListEntity {
-    public var id: UUID
-    public var title: String
-    public var createdAt: Date
-    public var updatedAt: Date
-    
-    // Relationship to items
-    @Relationship(deleteRule: .cascade)
-    public var items: [ShoppingItemEntity]
-    
-    public init(
-        id: UUID = UUID(),
-        title: String,
-        items: [ShoppingItemEntity] = [],
-        createdAt: Date = Date(),
-        updatedAt: Date = Date()
-    ) {
-        self.id = id
-        self.title = title
-        self.items = items
-        self.createdAt = createdAt
-        self.updatedAt = updatedAt
-    }
-}
-
-// MARK: - Conversion Extensions
-public extension ShoppingItemEntity {
-    var itemCategory: ItemCategory {
-        ItemCategory(rawValue: category) ?? .other
-    }
-    
-    func setCategory(_ category: ItemCategory) {
-        self.category = category.rawValue
-        self.updatedAt = Date()
-    }
-    
-    var displayName: String {
-        quantity > 1 ? "\\(quantity)x \\(name)" : name
-    }
-    
-    func toggle() {
-        isCompleted.toggle()
-        updatedAt = Date()
-    }
-    
-    func updateQuantity(_ newQuantity: Int) {
-        guard newQuantity > 0 else { return }
-        quantity = newQuantity
-        updatedAt = Date()
-    }
-}
-
-public extension ShoppingListEntity {
-    var completedItems: [ShoppingItemEntity] {
-        items.filter(\.isCompleted)
-    }
-    
-    var pendingItems: [ShoppingItemEntity] {
-        items.filter { !$0.isCompleted }
-    }
-    
-    var completionPercentage: Double {
-        guard !items.isEmpty else { return 0 }
-        return Double(completedItems.count) / Double(items.count)
-    }
-    
-    func addItem(_ item: ShoppingItemEntity) {
-        items.append(item)
-        item.shoppingList = self
-        updatedAt = Date()
-    }
-    
-    func removeItem(_ item: ShoppingItemEntity) {
-        items.removeAll { $0.id == item.id }
-        updatedAt = Date()
-    }
-    
-    func clearCompleted() {
-        items.removeAll(where: \.isCompleted)
-        updatedAt = Date()
-    }
-}
+let package = Package(
+    name: "Library",
+    platforms: [
+        .iOS(.v17),
+        .macOS(.v14)
+    ],
+    products: [
+        .library(name: "Models", targets: ["Models"]),
+        .library(name: "AppFeature", targets: ["AppFeature"]),
+    ],
+    dependencies: [
+        // Point-Free Modern Persistence Stack
+        .package(url: "https://github.com/groue/GRDB.swift.git", from: "6.24.0"),
+        .package(url: "https://github.com/pointfreeco/swift-sharing.git", from: "1.0.0"),
+        .package(url: "https://github.com/pointfreeco/swift-structured-queries.git", from: "0.10.0"),
+    ],
+    targets: [
+        .target(
+            name: "Models",
+            dependencies: [
+                .product(name: "GRDB", package: "GRDB.swift"),
+                .product(name: "Sharing", package: "swift-sharing"),
+                .product(name: "StructuredQueriesCore", package: "swift-structured-queries"),
+            ]
+        ),
+        .target(
+            name: "AppFeature",
+            dependencies: [
+                "Models",
+                .product(name: "SharingGRDBCore", package: "swift-sharing"),
+            ]
+        ),
+        .testTarget(
+            name: "LibraryTests",
+            dependencies: ["Models", "AppFeature"]
+        ),
+    ]
+)
 ```
 
 **✅ Completion Check:**
-- [ ] SwiftData models compile
-- [ ] Relationships are properly defined
-- [ ] Conversion methods work
+- [ ] StructuredQueries dependency toegevoegd
+- [ ] SharingGRDB dependency toegevoegd voor AppFeature
+- [ ] Project compileert zonder errors
 
 ---
 
-## 📚 Lesson 3.2: Data Repository
+## 📚 Lesson 3.2: Table Definitions met StructuredQueries
 
-### Task 2: Create Data Repository
+### Task 2: Create Type-Safe Table Definitions
 
-**Location:** `Library/Sources/Models/DataRepository.swift`
+**Location:** `Library/Sources/Models/TableDefinitions.swift`
 
 ```swift
-import SwiftData
 import Foundation
+import GRDB
+import StructuredQueriesCore
 
-@Observable
-public final class DataRepository {
-    private var modelContainer: ModelContainer
-    private var modelContext: ModelContext
+// MARK: - Shopping Lists Table Definition
+public struct ShoppingListsTable: Table {
+    public static let databaseTableName = "shopping_lists"
     
-    public init() {
-        do {
-            let schema = Schema([
-                ShoppingListEntity.self,
-                ShoppingItemEntity.self,
+    public let id = Column("id", .text, .primaryKey)
+    public let title = Column("title", .text, .notNull)
+    public let createdAt = Column("created_at", .real, .notNull)
+    public let updatedAt = Column("updated_at", .real, .notNull)
+}
+
+// MARK: - Shopping Items Table Definition
+public struct ShoppingItemsTable: Table {
+    public static let databaseTableName = "shopping_items"
+    
+    public let id = Column("id", .text, .primaryKey)
+    public let name = Column("name", .text, .notNull)
+    public let quantity = Column("quantity", .integer, .notNull)
+    public let isCompleted = Column("is_completed", .integer, .notNull)
+    public let notes = Column("notes", .text, .notNull)
+    public let categoryId = Column("category_id", .integer, .notNull)
+    public let shoppingListId = Column("shopping_list_id", .text, .notNull)
+    public let createdAt = Column("created_at", .real, .notNull)
+    public let updatedAt = Column("updated_at", .real, .notNull)
+}
+
+// MARK: - Item Categories Table Definition
+public struct ItemCategoriesTable: Table {
+    public static let databaseTableName = "item_categories"
+    
+    public let id = Column("id", .integer, .primaryKey)
+    public let name = Column("name", .text, .notNull)
+    public let emoji = Column("emoji", .text, .notNull)
+    public let sortOrder = Column("sort_order", .integer, .notNull)
+}
+
+// MARK: - Global Table Instances
+public let shoppingListsTable = ShoppingListsTable()
+public let shoppingItemsTable = ShoppingItemsTable()
+public let itemCategoriesTable = ItemCategoriesTable()
+```
+
+**✅ Completion Check:**
+- [ ] Alle tables gedefinieerd met StructuredQueries syntax
+- [ ] Column types matchen SQL schema exact
+- [ ] Global table instances beschikbaar
+
+---
+
+## 📚 Lesson 3.3: Type-Safe Query Builders
+
+### Task 3: Create Query Extensions
+
+**Location:** `Library/Sources/Models/QueryExtensions.swift`
+
+```swift
+import Foundation
+import GRDB
+import StructuredQueriesCore
+
+// MARK: - Shopping List Queries
+public extension QueryInterface where T == ShoppingListsTable {
+    /// Fetch all lists ordered by most recent update
+    static func allOrderedByDate() -> some SelectStatement<ShoppingList> {
+        from(shoppingListsTable)
+            .orderBy(.desc(shoppingListsTable.updatedAt))
+    }
+    
+    /// Fetch lists with item counts using LEFT JOIN
+    static func withItemCounts() -> some SelectStatement<ShoppingListWithCount> {
+        from(shoppingListsTable)
+            .leftJoin(shoppingItemsTable, on: shoppingListsTable.id == shoppingItemsTable.shoppingListId)
+            .select([
+                shoppingListsTable.id,
+                shoppingListsTable.title, 
+                shoppingListsTable.createdAt,
+                shoppingListsTable.updatedAt,
+                count(shoppingItemsTable.id).as("item_count"),
+                countIf(shoppingItemsTable.isCompleted == 1).as("completed_count")
             ])
-            
-            let modelConfiguration = ModelConfiguration(
-                schema: schema,
-                isStoredInMemoryOnly: false
-            )
-            
-            modelContainer = try ModelContainer(
-                for: schema,
-                configurations: [modelConfiguration]
-            )
-            
-            modelContext = ModelContext(modelContainer)
-            
-        } catch {
-            fatalError("Failed to create ModelContainer: \\(error)")
-        }
+            .groupBy([shoppingListsTable.id])
+            .orderBy(.desc(shoppingListsTable.updatedAt))
     }
     
-    // MARK: - List Operations
-    
-    public func fetchLists() -> [ShoppingListEntity] {
-        do {
-            let descriptor = FetchDescriptor<ShoppingListEntity>(
-                sortBy: [SortDescriptor(\\ShoppingListEntity.updatedAt, order: .reverse)]
-            )
-            return try modelContext.fetch(descriptor)
-        } catch {
-            print("Failed to fetch lists: \\(error)")
-            return []
-        }
+    /// Find list by exact title
+    static func byTitle(_ title: String) -> some SelectStatement<ShoppingList> {
+        from(shoppingListsTable)
+            .where(shoppingListsTable.title == title)
     }
     
-    public func saveList(_ list: ShoppingListEntity) {
-        modelContext.insert(list)
-        saveContext()
-    }
-    
-    public func deleteList(_ list: ShoppingListEntity) {
-        modelContext.delete(list)
-        saveContext()
-    }
-    
-    // MARK: - Item Operations
-    
-    public func saveItem(_ item: ShoppingItemEntity) {
-        modelContext.insert(item)
-        saveContext()
-    }
-    
-    public func deleteItem(_ item: ShoppingItemEntity) {
-        modelContext.delete(item)
-        saveContext()
-    }
-    
-    public func updateItem(_ item: ShoppingItemEntity) {
-        // SwiftData automatically tracks changes
-        saveContext()
-    }
-    
-    // MARK: - Context Management
-    
-    private func saveContext() {
-        do {
-            try modelContext.save()
-        } catch {
-            print("Failed to save context: \\(error)")
-        }
-    }
-    
-    public var context: ModelContext {
-        modelContext
-    }
-    
-    // MARK: - Sample Data
-    
-    public func loadSampleDataIfNeeded() {
-        let lists = fetchLists()
-        
-        guard lists.isEmpty else { return }
-        
-        print("Loading sample data...")
-        
-        // Create sample lists
-        let weeklyList = ShoppingListEntity(title: "Weekly Groceries")
-        let partyList = ShoppingListEntity(title: "Party Supplies")
-        let quickList = ShoppingListEntity(title: "Quick Run")
-        
-        // Add items to weekly list
-        let milk = ShoppingItemEntity(name: "Milk", category: .dairy)
-        let bananas = ShoppingItemEntity(name: "Bananas", quantity: 6, category: .produce)
-        let chicken = ShoppingItemEntity(name: "Chicken Breast", quantity: 2, category: .meat)
-        let rice = ShoppingItemEntity(name: "Rice", category: .pantry, notes: "Basmati preferred")
-        let iceCream = ShoppingItemEntity(name: "Ice Cream", category: .frozen)
-        
-        weeklyList.addItem(milk)
-        weeklyList.addItem(bananas)
-        weeklyList.addItem(chicken)
-        weeklyList.addItem(rice)
-        weeklyList.addItem(iceCream)
-        
-        // Add items to party list
-        let chips = ShoppingItemEntity(name: "Chips", quantity: 3, category: .pantry)
-        let soda = ShoppingItemEntity(name: "Soda", quantity: 6, category: .other)
-        let napkins = ShoppingItemEntity(name: "Napkins", category: .household)
-        
-        partyList.addItem(chips)
-        partyList.addItem(soda)
-        partyList.addItem(napkins)
-        
-        // Add items to quick list
-        let bread = ShoppingItemEntity(name: "Bread", category: .pantry)
-        let eggs = ShoppingItemEntity(name: "Eggs", quantity: 12, category: .dairy)
-        
-        quickList.addItem(bread)
-        quickList.addItem(eggs)
-        
-        // Save all lists
-        saveList(weeklyList)
-        saveList(partyList)
-        saveList(quickList)
+    /// Search lists by title pattern
+    static func searchByTitle(_ searchTerm: String) -> some SelectStatement<ShoppingList> {
+        from(shoppingListsTable)
+            .where(shoppingListsTable.title.like("%\(searchTerm)%"))
+            .orderBy(.desc(shoppingListsTable.updatedAt))
     }
 }
 
-// MARK: - Error Handling
-public enum DataRepositoryError: Error, LocalizedError {
-    case saveFailed
-    case fetchFailed
-    case deleteFailed
+// MARK: - Shopping Item Queries  
+public extension QueryInterface where T == ShoppingItemsTable {
+    /// Fetch all items for a specific list
+    static func forList(_ listId: String) -> some SelectStatement<ShoppingItem> {
+        from(shoppingItemsTable)
+            .where(shoppingItemsTable.shoppingListId == listId)
+            .orderBy(.asc(shoppingItemsTable.createdAt))
+    }
     
-    public var errorDescription: String? {
-        switch self {
-        case .saveFailed:
-            return "Failed to save data"
-        case .fetchFailed:
-            return "Failed to fetch data"
-        case .deleteFailed:
-            return "Failed to delete data"
+    /// Fetch items with category information using INNER JOIN
+    static func withCategories(forListId listId: String) -> some SelectStatement<ItemWithCategory> {
+        from(shoppingItemsTable)
+            .join(itemCategoriesTable, on: shoppingItemsTable.categoryId == itemCategoriesTable.id)
+            .where(shoppingItemsTable.shoppingListId == listId)
+            .select([
+                shoppingItemsTable.allColumns,
+                itemCategoriesTable.name.as("category_name"),
+                itemCategoriesTable.emoji.as("category_emoji"),
+                itemCategoriesTable.sortOrder.as("category_sort_order")
+            ])
+            .orderBy([.asc(itemCategoriesTable.sortOrder), .asc(shoppingItemsTable.createdAt)])
+    }
+    
+    /// Fetch completed items for a list
+    static func completed(forListId listId: String) -> some SelectStatement<ShoppingItem> {
+        from(shoppingItemsTable)
+            .where(shoppingItemsTable.shoppingListId == listId)
+            .where(shoppingItemsTable.isCompleted == 1)
+            .orderBy(.desc(shoppingItemsTable.updatedAt))
+    }
+    
+    /// Fetch pending items for a list
+    static func pending(forListId listId: String) -> some SelectStatement<ShoppingItem> {
+        from(shoppingItemsTable)
+            .where(shoppingItemsTable.shoppingListId == listId)
+            .where(shoppingItemsTable.isCompleted == 0)
+            .orderBy(.asc(shoppingItemsTable.createdAt))
+    }
+    
+    /// Search items by name within a list
+    static func search(_ searchTerm: String, inListId listId: String) -> some SelectStatement<ShoppingItem> {
+        from(shoppingItemsTable)
+            .where(shoppingItemsTable.shoppingListId == listId)
+            .where(shoppingItemsTable.name.like("%\(searchTerm)%"))
+            .orderBy(.asc(shoppingItemsTable.name))
+    }
+    
+    /// Complex aggregation: items grouped by category with counts
+    static func categoryStats(forListId listId: String) -> some SelectStatement<CategoryStats> {
+        from(shoppingItemsTable)
+            .join(itemCategoriesTable, on: shoppingItemsTable.categoryId == itemCategoriesTable.id)
+            .where(shoppingItemsTable.shoppingListId == listId)
+            .select([
+                itemCategoriesTable.id,
+                itemCategoriesTable.name,
+                itemCategoriesTable.emoji,
+                itemCategoriesTable.sortOrder,
+                count(shoppingItemsTable.id).as("item_count"),
+                countIf(shoppingItemsTable.isCompleted == 1).as("completed_count")
+            ])
+            .groupBy([itemCategoriesTable.id])
+            .having(count(shoppingItemsTable.id) > 0)
+            .orderBy(.asc(itemCategoriesTable.sortOrder))
+    }
+}
+
+// MARK: - Helper Functions
+public func countIf<T>(_ condition: T) -> CountExpression {
+    count(case: when(condition, then: 1))
+}
+```
+
+**✅ Completion Check:**
+- [ ] Type-safe query builders geïmplementeerd
+- [ ] Complex JOIN queries werken
+- [ ] Aggregation functions correct gedefinieerd
+- [ ] Search en filtering patterns werkend
+
+---
+
+## 📚 Lesson 3.4: Repository Updates met StructuredQueries
+
+### Task 4: Update Repositories met Type-Safe Queries
+
+**Location:** `Library/Sources/Models/StructuredQueriesRepository.swift`
+
+```swift
+import Foundation
+import GRDB
+import StructuredQueriesCore
+
+// MARK: - Updated Shopping List Repository
+public extension ShoppingListRepository {
+    /// Fetch lists using type-safe queries
+    func fetchAllOrderedByDateStructured() async throws -> [ShoppingList] {
+        do {
+            return try await database.reader.read { db in
+                try QueryInterface<ShoppingListsTable>.allOrderedByDate().fetchAll(db)
+            }
+        } catch {
+            throw RepositoryError.queryFailed(error)
+        }
+    }
+    
+    /// Fetch lists with counts using structured query
+    func fetchListsWithItemCountsStructured() async throws -> [ShoppingListWithCount] {
+        do {
+            return try await database.reader.read { db in
+                try QueryInterface<ShoppingListsTable>.withItemCounts().fetchAll(db)
+            }
+        } catch {
+            throw RepositoryError.queryFailed(error)
+        }
+    }
+    
+    /// Search lists by title
+    func searchLists(byTitle searchTerm: String) async throws -> [ShoppingList] {
+        do {
+            return try await database.reader.read { db in
+                try QueryInterface<ShoppingListsTable>.searchByTitle(searchTerm).fetchAll(db)
+            }
+        } catch {
+            throw RepositoryError.queryFailed(error)
+        }
+    }
+}
+
+// MARK: - Updated Shopping Item Repository
+public extension ShoppingItemRepository {
+    /// Fetch items using structured query
+    func fetchItemsStructured(forListId listId: String) async throws -> [ShoppingItem] {
+        do {
+            return try await database.reader.read { db in
+                try QueryInterface<ShoppingItemsTable>.forList(listId).fetchAll(db)
+            }
+        } catch {
+            throw RepositoryError.queryFailed(error)
+        }
+    }
+    
+    /// Fetch items with category info using structured query
+    func fetchItemsWithCategoriesStructured(forListId listId: String) async throws -> [ItemWithCategory] {
+        do {
+            return try await database.reader.read { db in
+                try QueryInterface<ShoppingItemsTable>.withCategories(forListId: listId).fetchAll(db)
+            }
+        } catch {
+            throw RepositoryError.queryFailed(error)
+        }
+    }
+    
+    /// Search items within a list
+    func searchItems(_ searchTerm: String, inListId listId: String) async throws -> [ShoppingItem] {
+        do {
+            return try await database.reader.read { db in
+                try QueryInterface<ShoppingItemsTable>.search(searchTerm, inListId: listId).fetchAll(db)
+            }
+        } catch {
+            throw RepositoryError.queryFailed(error)
+        }
+    }
+    
+    /// Get category statistics for a list
+    func fetchCategoryStatsStructured(forListId listId: String) async throws -> [CategoryStats] {
+        do {
+            return try await database.reader.read { db in
+                try QueryInterface<ShoppingItemsTable>.categoryStats(forListId: listId).fetchAll(db)
+            }
+        } catch {
+            throw RepositoryError.queryFailed(error)
         }
     }
 }
 ```
 
 **✅ Completion Check:**
-- [ ] Repository pattern implemented
-- [ ] CRUD operations work
-- [ ] Error handling in place
-- [ ] Sample data loading works
+- [ ] Repository methods gebruik maken van StructuredQueries
+- [ ] Type safety op compile-time gegarandeerd
+- [ ] Query compositie werkt correct
+- [ ] Performance is geoptimaliseerd
 
 ---
 
-## 📚 Lesson 3.3: Update App to Use SwiftData
+## 📚 Lesson 3.5: @FetchAll Property Wrapper Setup
 
-### Task 3: Update ContentView with Data Repository
+### Task 5: Create SharingGRDB Integration
 
-**Location:** `Library/Sources/AppFeature/ContentView.swift`
-
-Replace the existing content:
+**Location:** `Library/Sources/AppFeature/DatabaseObservation.swift`
 
 ```swift
 import SwiftUI
-import SwiftData
+import GRDB
+import SharingGRDBCore
 import Models
 
-public struct ContentView: View {
-    @State private var dataRepository = DataRepository()
-    @Query(sort: \\ShoppingListEntity.updatedAt, order: .reverse) 
-    private var lists: [ShoppingListEntity]
-    @State private var selectedList: ShoppingListEntity?
+// MARK: - Database Observation Keys
+extension SharedReaderKey where Self == DatabaseKey {
+    /// Shared database reader for the entire app
+    public static var database: DatabaseKey { DatabaseKey() }
+}
+
+public struct DatabaseKey: SharedReaderKey {
+    public var reader: DatabaseReader { DatabaseManager.shared.reader }
+}
+
+// MARK: - Shopping Lists Observation
+@propertyWrapper
+public struct FetchShoppingLists: DynamicProperty {
+    @FetchAll<ShoppingListWithCount> private var lists: [ShoppingListWithCount]
+    
+    public init() {
+        self._lists = FetchAll(
+            .database,
+            query: QueryInterface<ShoppingListsTable>.withItemCounts()
+        )
+    }
+    
+    public var wrappedValue: [ShoppingListWithCount] { lists }
+    public var projectedValue: Binding<[ShoppingListWithCount]> {
+        Binding(
+            get: { lists },
+            set: { _ in } // Read-only binding for database-driven data
+        )
+    }
+}
+
+// MARK: - Shopping Items Observation
+@propertyWrapper  
+public struct FetchShoppingItems: DynamicProperty {
+    @FetchAll<ItemWithCategory> private var items: [ItemWithCategory]
+    
+    public init(listId: String) {
+        self._items = FetchAll(
+            .database,
+            query: QueryInterface<ShoppingItemsTable>.withCategories(forListId: listId)
+        )
+    }
+    
+    public var wrappedValue: [ItemWithCategory] { items }
+}
+
+// MARK: - Category Statistics Observation
+@propertyWrapper
+public struct FetchCategoryStats: DynamicProperty {
+    @FetchAll<CategoryStats> private var stats: [CategoryStats]
+    
+    public init(listId: String) {
+        self._stats = FetchAll(
+            .database, 
+            query: QueryInterface<ShoppingItemsTable>.categoryStats(forListId: listId)
+        )
+    }
+    
+    public var wrappedValue: [CategoryStats] { stats }
+}
+
+// MARK: - Dynamic Search Query
+@propertyWrapper
+public struct FetchSearchResults: DynamicProperty {
+    @State private var searchTerm: String
+    @FetchAll<ShoppingItem> private var results: [ShoppingItem]
+    
+    public init(listId: String, searchTerm: String = "") {
+        self._searchTerm = State(initialValue: searchTerm)
+        
+        if searchTerm.isEmpty {
+            self._results = FetchAll(
+                .database,
+                query: QueryInterface<ShoppingItemsTable>.forList(listId)
+            )
+        } else {
+            self._results = FetchAll(
+                .database,
+                query: QueryInterface<ShoppingItemsTable>.search(searchTerm, inListId: listId)
+            )
+        }
+    }
+    
+    public var wrappedValue: [ShoppingItem] { results }
+    
+    public func updateSearch(_ newSearchTerm: String, listId: String) {
+        searchTerm = newSearchTerm
+        // Update query dynamically
+        _results.query = newSearchTerm.isEmpty 
+            ? QueryInterface<ShoppingItemsTable>.forList(listId)
+            : QueryInterface<ShoppingItemsTable>.search(newSearchTerm, inListId: listId)
+    }
+}
+```
+
+**✅ Completion Check:**
+- [ ] @FetchAll property wrappers geïmplementeerd
+- [ ] Database observations real-time updates geven
+- [ ] Search functionality is reactive
+- [ ] Proper binding patterns voor SwiftUI
+
+---
+
+## 📚 Lesson 3.6: Reactive SwiftUI Views
+
+### Task 6: Create Database-Driven Views
+
+**Location:** `Library/Sources/AppFeature/ReactiveViews.swift`
+
+```swift
+import SwiftUI
+import Models
+
+// MARK: - Main Content View
+public struct ReactiveContentView: View {
+    @FetchShoppingLists private var lists
+    @State private var selectedList: ShoppingListWithCount?
     @State private var showingAddList = false
     
     public init() {}
     
     public var body: some View {
         NavigationSplitView {
-            // Master: List of shopping lists
-            SwiftDataListsView(
+            ReactiveListsView(
                 lists: lists,
                 selectedList: $selectedList,
-                showingAddList: $showingAddList,
-                dataRepository: dataRepository
+                showingAddList: $showingAddList
             )
         } detail: {
-            // Detail: Selected list items
             if let selectedList {
-                SwiftDataListDetailView(
-                    list: selectedList,
-                    dataRepository: dataRepository
-                )
+                ReactiveListDetailView(list: selectedList)
             } else {
                 PlaceholderView()
             }
         }
-        .modelContainer(dataRepository.context.container)
-        .onAppear {
-            dataRepository.loadSampleDataIfNeeded()
-        }
     }
 }
 
-#Preview {
-    ContentView()
-}
-```
-
-### Task 4: Create SwiftData-powered Views
-
-**Location:** `Library/Sources/AppFeature/SwiftDataViews.swift`
-
-```swift
-import SwiftUI
-import SwiftData
-import Models
-
-struct SwiftDataListsView: View {
-    let lists: [ShoppingListEntity]
-    @Binding var selectedList: ShoppingListEntity?
+// MARK: - Reactive Lists Overview
+struct ReactiveListsView: View {
+    let lists: [ShoppingListWithCount]
+    @Binding var selectedList: ShoppingListWithCount?
     @Binding var showingAddList: Bool
-    let dataRepository: DataRepository
     
     var body: some View {
         List(selection: $selectedList) {
             ForEach(lists) { list in
                 NavigationLink(value: list) {
-                    SwiftDataListRowView(list: list)
+                    ReactiveListRowView(list: list)
                 }
             }
-            .onDelete(perform: deleteLists)
         }
-        .navigationTitle("Shopping Lists")
+        .navigationTitle("Boodschappenlijsten")
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                Button {
+                Button("Nieuwe Lijst") {
                     showingAddList = true
-                } label: {
-                    Image(systemName: "plus")
                 }
             }
         }
         .sheet(isPresented: $showingAddList) {
-            SwiftDataAddListView(dataRepository: dataRepository) { newList in
-                selectedList = newList
-            }
-        }
-    }
-    
-    private func deleteLists(offsets: IndexSet) {
-        for index in offsets {
-            dataRepository.deleteList(lists[index])
+            AddListView()
         }
     }
 }
 
-struct SwiftDataListRowView: View {
-    let list: ShoppingListEntity
+// MARK: - Reactive List Row with Real-time Updates
+struct ReactiveListRowView: View {
+    let list: ShoppingListWithCount
     
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -448,7 +569,7 @@ struct SwiftDataListRowView: View {
                 
                 Spacer()
                 
-                Text("\\(list.completedItems.count)/\\(list.items.count)")
+                Text("\\(list.completedCount)/\\(list.itemCount)")
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
@@ -456,7 +577,7 @@ struct SwiftDataListRowView: View {
             ProgressView(value: list.completionPercentage)
                 .tint(.green)
             
-            Text("Updated \\(list.updatedAt.formatted(.relative(presentation: .named)))")
+            Text("Bijgewerkt \\(list.updatedAt.formatted(.relative(presentation: .named)))")
                 .font(.caption2)
                 .foregroundColor(.secondary)
         }
@@ -464,42 +585,45 @@ struct SwiftDataListRowView: View {
     }
 }
 
-struct SwiftDataListDetailView: View {
-    @Bindable var list: ShoppingListEntity
-    let dataRepository: DataRepository
-    @State private var showingAddItem = false
+// MARK: - Reactive List Detail View
+struct ReactiveListDetailView: View {
+    let list: ShoppingListWithCount
+    @FetchShoppingItems private var items
+    @FetchCategoryStats private var categoryStats
     @State private var searchText = ""
+    @State private var showingAddItem = false
     
-    private var filteredItems: [ShoppingItemEntity] {
-        if searchText.isEmpty {
-            return list.items.sorted { $0.itemCategory.sortOrder < $1.itemCategory.sortOrder }
-        } else {
-            return list.items.filter {
-                $0.name.localizedCaseInsensitiveContains(searchText)
-            }.sorted { $0.itemCategory.sortOrder < $1.itemCategory.sortOrder }
-        }
-    }
-    
-    private var groupedItems: [ItemCategory: [ShoppingItemEntity]] {
-        Dictionary(grouping: filteredItems) { $0.itemCategory }
+    init(list: ShoppingListWithCount) {
+        self.list = list
+        self._items = FetchShoppingItems(listId: list.id)
+        self._categoryStats = FetchCategoryStats(listId: list.id)
     }
     
     var body: some View {
         List {
-            if list.items.isEmpty {
+            if items.isEmpty {
                 EmptyStateView {
                     showingAddItem = true
                 }
             } else {
-                ForEach(ItemCategory.allCases, id: \\.self) { category in
-                    if let items = groupedItems[category], !items.isEmpty {
-                        Section(category.rawValue) {
-                            ForEach(items) { item in
-                                SwiftDataItemRowView(
-                                    item: item,
-                                    dataRepository: dataRepository,
-                                    onDelete: { deleteItem(item) }
-                                )
+                // Group items by category
+                ForEach(categoryStats) { categoryStat in
+                    let categoryItems = items.filter { $0.categoryId == categoryStat.id }
+                    
+                    if !categoryItems.isEmpty {
+                        Section {
+                            ForEach(categoryItems) { item in
+                                ReactiveItemRowView(item: item)
+                            }
+                        } header: {
+                            HStack {
+                                Text("\\(categoryStat.emoji) \\(categoryStat.name)")
+                                Spacer()
+                                if categoryStat.itemCount > 0 {
+                                    Text("\\(categoryStat.completedCount)/\\(categoryStat.itemCount)")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
                             }
                         }
                     }
@@ -507,61 +631,46 @@ struct SwiftDataListDetailView: View {
             }
         }
         .navigationTitle(list.title)
-        .searchable(text: $searchText, prompt: "Search items")
+        .searchable(text: $searchText, prompt: "Zoek items")
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
                 Menu {
-                    Button("Clear Completed") {
-                        clearCompleted()
+                    Button("Voltooide items verwijderen") {
+                        Task { await clearCompleted() }
                     }
-                    .disabled(list.completedItems.isEmpty)
+                    .disabled(list.completedCount == 0)
                 } label: {
                     Image(systemName: "ellipsis.circle")
                 }
                 
-                Button {
+                Button("Item toevoegen") {
                     showingAddItem = true
-                } label: {
-                    Image(systemName: "plus")
                 }
             }
         }
         .sheet(isPresented: $showingAddItem) {
-            SwiftDataAddItemView(
-                list: list,
-                dataRepository: dataRepository
-            )
+            AddItemView(listId: list.id)
         }
     }
     
-    private func deleteItem(_ item: ShoppingItemEntity) {
-        list.removeItem(item)
-        dataRepository.deleteItem(item)
-    }
-    
-    private func clearCompleted() {
-        let completedItems = list.completedItems
-        for item in completedItems {
-            dataRepository.deleteItem(item)
-        }
-        list.clearCompleted()
-        dataRepository.saveContext()
+    @MainActor
+    private func clearCompleted() async {
+        // Repository call - UI will update automatically via @FetchAll
+        let itemRepo = ShoppingItemRepository()
+        try? await itemRepo.deleteCompletedItems(forListId: list.id)
     }
 }
 
-struct SwiftDataItemRowView: View {
-    @Bindable var item: ShoppingItemEntity
-    let dataRepository: DataRepository
-    let onDelete: () -> Void
-    
+// MARK: - Reactive Item Row
+struct ReactiveItemRowView: View {
+    let item: ItemWithCategory
     @State private var showingEditSheet = false
     
     var body: some View {
         HStack(spacing: 12) {
             // Completion checkbox
             Button {
-                item.toggle()
-                dataRepository.updateItem(item)
+                Task { await toggleCompletion() }
             } label: {
                 Image(systemName: item.isCompleted ? "checkmark.circle.fill" : "circle")
                     .font(.title2)
@@ -571,15 +680,9 @@ struct SwiftDataItemRowView: View {
             
             // Item content
             VStack(alignment: .leading, spacing: 2) {
-                HStack {
-                    Text(item.displayName)
-                        .strikethrough(item.isCompleted)
-                        .foregroundColor(item.isCompleted ? .secondary : .primary)
-                    
-                    Spacer()
-                    
-                    Text(item.itemCategory.emoji)
-                }
+                Text(item.displayName)
+                    .strikethrough(item.isCompleted)
+                    .foregroundColor(item.isCompleted ? .secondary : .primary)
                 
                 if !item.notes.isEmpty {
                     Text(item.notes)
@@ -593,464 +696,228 @@ struct SwiftDataItemRowView: View {
         .onTapGesture {
             showingEditSheet = true
         }
-        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-            Button("Delete", role: .destructive) {
-                onDelete()
-            }
-        }
-        .swipeActions(edge: .leading) {
-            Button("Edit") {
-                showingEditSheet = true
-            }
-            .tint(.blue)
-        }
         .sheet(isPresented: $showingEditSheet) {
-            SwiftDataEditItemView(
-                item: item,
-                dataRepository: dataRepository
-            )
+            EditItemView(item: item)
         }
+    }
+    
+    @MainActor
+    private func toggleCompletion() async {
+        // Repository call - UI will update automatically via @FetchAll
+        let itemRepo = ShoppingItemRepository()
+        try? await itemRepo.toggleCompletion(itemId: item.id)
     }
 }
 
-extension DataRepository {
-    func saveContext() {
-        do {
-            try context.save()
-        } catch {
-            print("Failed to save context: \\(error)")
+// MARK: - Placeholder View
+struct PlaceholderView: View {
+    var body: some View {
+        VStack(spacing: 20) {
+            Image(systemName: "list.clipboard")
+                .font(.system(size: 80))
+                .foregroundColor(.secondary)
+            
+            VStack(spacing: 8) {
+                Text("Selecteer een lijst")
+                    .font(.title2)
+                    .fontWeight(.medium)
+                
+                Text("Kies een boodschappenlijst om de items te bekijken")
+                    .font(.body)
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+            }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(.systemGroupedBackground))
     }
+}
+
+// MARK: - Empty State View
+struct EmptyStateView: View {
+    let onAddItem: () -> Void
+    
+    var body: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "cart")
+                .font(.system(size: 60))
+                .foregroundColor(.secondary)
+            
+            VStack(spacing: 8) {
+                Text("Je lijst is leeg")
+                    .font(.title2)
+                    .fontWeight(.medium)
+                
+                Text("Voeg wat items toe om te beginnen")
+                    .font(.body)
+                    .foregroundColor(.secondary)
+            }
+            
+            Button("Item toevoegen") {
+                onAddItem()
+            }
+            .buttonStyle(.borderedProminent)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(.systemGroupedBackground))
+    }
+}
+
+#Preview {
+    ReactiveContentView()
 }
 ```
 
 **✅ Completion Check:**
-- [ ] Views use SwiftData entities
-- [ ] @Query and @Bindable work correctly
-- [ ] Data persists between app launches
+- [ ] SwiftUI views gebruiken @FetchAll voor reactive updates
+- [ ] Database changes triggeren automatisch UI updates
+- [ ] Search functionality werkt real-time
+- [ ] Category grouping wordt dynamisch bijgewerkt
 
 ---
 
-## 📚 Lesson 3.4: SwiftData Add/Edit Forms
+## 🧪 Testing Type-Safe Queries
 
-### Task 5: Create SwiftData Forms
+### Task 7: Create StructuredQueries Tests
 
-**Location:** `Library/Sources/AppFeature/SwiftDataForms.swift`
-
-```swift
-import SwiftUI
-import SwiftData
-import Models
-
-struct SwiftDataAddListView: View {
-    @Environment(\\.dismiss) private var dismiss
-    @State private var title = ""
-    @State private var selectedTemplate: ListTemplate?
-    
-    let dataRepository: DataRepository
-    let onSave: (ShoppingListEntity) -> Void
-    
-    var body: some View {
-        NavigationView {
-            Form {
-                Section("List Details") {
-                    TextField("List name", text: $title)
-                        .textInputAutocapitalization(.words)
-                }
-                
-                Section("Templates") {
-                    ForEach(ListTemplate.allCases) { template in
-                        Button {
-                            selectedTemplate = template
-                        } label: {
-                            HStack {
-                                VStack(alignment: .leading) {
-                                    Text(template.name)
-                                        .foregroundColor(.primary)
-                                    Text(template.description)
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                }
-                                Spacer()
-                                if selectedTemplate == template {
-                                    Image(systemName: "checkmark")
-                                        .foregroundColor(.accentColor)
-                                }
-                            }
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-            }
-            .navigationTitle("New List")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
-                        dismiss()
-                    }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
-                        saveList()
-                    }
-                    .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                }
-            }
-        }
-    }
-    
-    private func saveList() {
-        let newList = ShoppingListEntity(
-            title: title.trimmingCharacters(in: .whitespacesAndNewlines)
-        )
-        
-        // Add template items if selected
-        if let template = selectedTemplate {
-            for templateItem in template.items {
-                let item = ShoppingItemEntity(
-                    name: templateItem.name,
-                    quantity: templateItem.quantity,
-                    notes: templateItem.notes,
-                    category: templateItem.category
-                )
-                newList.addItem(item)
-            }
-        }
-        
-        dataRepository.saveList(newList)
-        onSave(newList)
-        dismiss()
-    }
-}
-
-struct SwiftDataAddItemView: View {
-    @Environment(\\.dismiss) private var dismiss
-    @State private var name = ""
-    @State private var quantity = 1
-    @State private var category = ItemCategory.other
-    @State private var notes = ""
-    
-    let list: ShoppingListEntity
-    let dataRepository: DataRepository
-    
-    var body: some View {
-        NavigationView {
-            Form {
-                Section("Item Details") {
-                    TextField("Item name", text: $name)
-                        .textInputAutocapitalization(.words)
-                    
-                    Stepper("Quantity: \\(quantity)", value: $quantity, in: 1...99)
-                    
-                    Picker("Category", selection: $category) {
-                        ForEach(ItemCategory.allCases, id: \\.self) { category in
-                            HStack {
-                                Text(category.emoji)
-                                Text(category.rawValue)
-                            }
-                            .tag(category)
-                        }
-                    }
-                }
-                
-                Section("Notes") {
-                    TextField("Add notes (optional)", text: $notes, axis: .vertical)
-                        .lineLimit(3, reservesSpace: true)
-                }
-            }
-            .navigationTitle("New Item")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
-                        dismiss()
-                    }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Add") {
-                        saveItem()
-                    }
-                    .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                }
-            }
-        }
-    }
-    
-    private func saveItem() {
-        let newItem = ShoppingItemEntity(
-            name: name.trimmingCharacters(in: .whitespacesAndNewlines),
-            quantity: quantity,
-            notes: notes.trimmingCharacters(in: .whitespacesAndNewlines),
-            category: category
-        )
-        
-        list.addItem(newItem)
-        dataRepository.saveItem(newItem)
-        dismiss()
-    }
-}
-
-struct SwiftDataEditItemView: View {
-    @Bindable var item: ShoppingItemEntity
-    let dataRepository: DataRepository
-    @Environment(\\.dismiss) private var dismiss
-    
-    @State private var name: String
-    @State private var quantity: Int
-    @State private var category: ItemCategory
-    @State private var notes: String
-    
-    init(item: ShoppingItemEntity, dataRepository: DataRepository) {
-        self.item = item
-        self.dataRepository = dataRepository
-        self._name = State(initialValue: item.name)
-        self._quantity = State(initialValue: item.quantity)
-        self._category = State(initialValue: item.itemCategory)
-        self._notes = State(initialValue: item.notes)
-    }
-    
-    var body: some View {
-        NavigationView {
-            Form {
-                Section("Item Details") {
-                    TextField("Item name", text: $name)
-                        .textInputAutocapitalization(.words)
-                    
-                    Stepper("Quantity: \\(quantity)", value: $quantity, in: 1...99)
-                    
-                    Picker("Category", selection: $category) {
-                        ForEach(ItemCategory.allCases, id: \\.self) { category in
-                            HStack {
-                                Text(category.emoji)
-                                Text(category.rawValue)
-                            }
-                            .tag(category)
-                        }
-                    }
-                }
-                
-                Section("Notes") {
-                    TextField("Add notes (optional)", text: $notes, axis: .vertical)
-                        .lineLimit(3, reservesSpace: true)
-                }
-            }
-            .navigationTitle("Edit Item")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
-                        dismiss()
-                    }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
-                        saveChanges()
-                    }
-                    .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                }
-            }
-        }
-    }
-    
-    private func saveChanges() {
-        item.name = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        item.quantity = quantity
-        item.setCategory(category)
-        item.notes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
-        item.updatedAt = Date()
-        
-        dataRepository.updateItem(item)
-        dismiss()
-    }
-}
-
-#Preview("Add List") {
-    SwiftDataAddListView(dataRepository: DataRepository()) { list in
-        print("New list: \\(list.title)")
-    }
-}
-
-#Preview("Add Item") {
-    SwiftDataAddItemView(
-        list: ShoppingListEntity(title: "Test List"),
-        dataRepository: DataRepository()
-    )
-}
-```
-
-**✅ Completion Check:**
-- [ ] Forms work with SwiftData entities
-- [ ] Data saves correctly to persistent storage
-- [ ] Relationships between lists and items work
-
----
-
-## 📚 Lesson 3.5: Migration and Error Handling
-
-### Task 6: Add Migration Support
-
-**Location:** `Library/Sources/Models/DataMigration.swift`
-
-```swift
-import SwiftData
-import Foundation
-
-public class DataMigration {
-    public static func performMigrationIfNeeded(container: ModelContainer) {
-        // Future migration logic will go here
-        // For now, we'll just log that migration system is in place
-        print("Migration system initialized")
-    }
-    
-    public static func backupData(container: ModelContainer) {
-        // Future backup functionality
-        print("Backup system initialized")
-    }
-}
-
-// MARK: - Version Management
-public enum SchemaVersion: Int, CaseIterable {
-    case v1 = 1
-    
-    public static var current: SchemaVersion {
-        .v1
-    }
-}
-```
-
-### Task 7: Add Error Handling
-
-**Location:** `Library/Sources/Models/DataError.swift`
-
-```swift
-import Foundation
-
-public enum DataError: Error, LocalizedError {
-    case modelContainerFailed(Error)
-    case saveFailed(Error)
-    case fetchFailed(Error)
-    case deleteFailed(Error)
-    case migrationFailed(Error)
-    
-    public var errorDescription: String? {
-        switch self {
-        case .modelContainerFailed(let error):
-            return "Failed to initialize database: \\(error.localizedDescription)"
-        case .saveFailed(let error):
-            return "Failed to save data: \\(error.localizedDescription)"
-        case .fetchFailed(let error):
-            return "Failed to load data: \\(error.localizedDescription)"
-        case .deleteFailed(let error):
-            return "Failed to delete data: \\(error.localizedDescription)"
-        case .migrationFailed(let error):
-            return "Failed to migrate data: \\(error.localizedDescription)"
-        }
-    }
-    
-    public var recoverySuggestion: String? {
-        switch self {
-        case .modelContainerFailed:
-            return "Try restarting the app. If the problem persists, contact support."
-        case .saveFailed:
-            return "Check available storage space and try again."
-        case .fetchFailed:
-            return "Check your connection and try again."
-        case .deleteFailed:
-            return "Try again. If the problem persists, restart the app."
-        case .migrationFailed:
-            return "The app may need to be reinstalled to reset the database."
-        }
-    }
-}
-```
-
----
-
-## 🧪 Testing Persistence
-
-### Task 8: Test Data Persistence
-
-Create a comprehensive test:
-
-1. **Run the app** and create some lists and items
-2. **Force quit** the app (not just minimize)
-3. **Restart** the app
-4. **Verify** all your data is still there
-
-### Task 9: Create Storage Tests
-
-**Location:** `Library/Tests/LibraryTests/SwiftDataTests.swift`
+**Location:** `Library/Tests/LibraryTests/StructuredQueriesTests.swift`
 
 ```swift
 import XCTest
-import SwiftData
+import GRDB
+import StructuredQueriesCore
 @testable import Models
 
-final class SwiftDataTests: XCTestCase {
-    var repository: DataRepository!
+final class StructuredQueriesTests: XCTestCase {
+    var database: DatabaseManager!
+    var shoppingListRepo: ShoppingListRepository!
+    var shoppingItemRepo: ShoppingItemRepository!
     
-    override func setUp() {
-        super.setUp()
-        // Use in-memory storage for tests
-        repository = DataRepository()
+    override func setUp() async throws {
+        try await super.setUp()
+        
+        database = try DatabaseManager()
+        shoppingListRepo = ShoppingListRepository(database: database)
+        shoppingItemRepo = ShoppingItemRepository(database: database)
+        
+        // Insert test data
+        let list = try await shoppingListRepo.createList(title: "Test List")
+        _ = try await shoppingItemRepo.createItem(
+            name: "Test Item 1",
+            categoryId: 1, // Produce
+            shoppingListId: list.id
+        )
+        _ = try await shoppingItemRepo.createItem(
+            name: "Test Item 2", 
+            quantity: 3,
+            categoryId: 2, // Dairy
+            shoppingListId: list.id
+        )
     }
     
-    func testCreateAndFetchList() {
-        // Create a list
-        let list = ShoppingListEntity(title: "Test List")
-        repository.saveList(list)
-        
-        // Fetch lists
-        let fetchedLists = repository.fetchLists()
-        
-        XCTAssertEqual(fetchedLists.count, 1)
-        XCTAssertEqual(fetchedLists.first?.title, "Test List")
+    func testTypesSafeListQuery() async throws {
+        // Test structured query compilation
+        let lists = try await shoppingListRepo.fetchAllOrderedByDateStructured()
+        XCTAssertEqual(lists.count, 1)
+        XCTAssertEqual(lists.first?.title, "Test List")
     }
     
-    func testAddItemToList() {
-        // Create list and item
-        let list = ShoppingListEntity(title: "Test List")
-        let item = ShoppingItemEntity(name: "Test Item")
+    func testListsWithItemCounts() async throws {
+        let listsWithCounts = try await shoppingListRepo.fetchListsWithItemCountsStructured()
+        XCTAssertEqual(listsWithCounts.count, 1)
         
-        list.addItem(item)
-        repository.saveList(list)
-        
-        // Fetch and verify
-        let fetchedLists = repository.fetchLists()
-        XCTAssertEqual(fetchedLists.first?.items.count, 1)
-        XCTAssertEqual(fetchedLists.first?.items.first?.name, "Test Item")
+        let list = listsWithCounts.first!
+        XCTAssertEqual(list.itemCount, 2)
+        XCTAssertEqual(list.completedCount, 0)
+        XCTAssertEqual(list.completionPercentage, 0.0)
     }
     
-    func testItemCompletion() {
-        let item = ShoppingItemEntity(name: "Test Item")
+    func testItemsWithCategoriesJoin() async throws {
+        let list = try await shoppingListRepo.createList(title: "Test List")
+        let items = try await shoppingItemRepo.fetchItemsWithCategoriesStructured(forListId: list.id)
         
-        XCTAssertFalse(item.isCompleted)
+        XCTAssertEqual(items.count, 2)
         
-        item.toggle()
-        XCTAssertTrue(item.isCompleted)
-        
-        // Verify updatedAt changed
-        XCTAssertTrue(item.updatedAt > item.createdAt)
+        let firstItem = items.first!
+        XCTAssertEqual(firstItem.categoryName, "Produce")
+        XCTAssertEqual(firstItem.categoryEmoji, "🥬")
+        XCTAssertEqual(firstItem.categorySortOrder, 1)
     }
     
-    func testDeleteItem() {
-        let list = ShoppingListEntity(title: "Test List")
-        let item = ShoppingItemEntity(name: "Test Item")
+    func testSearchQuery() async throws {
+        let list = try await shoppingListRepo.createList(title: "Test List")
         
-        list.addItem(item)
-        XCTAssertEqual(list.items.count, 1)
+        // Search should find item with "Test" in name
+        let results = try await shoppingItemRepo.searchItems("Test", inListId: list.id)
+        XCTAssertEqual(results.count, 2)
         
-        list.removeItem(item)
-        XCTAssertEqual(list.items.count, 0)
+        // Search for specific item
+        let specificResults = try await shoppingItemRepo.searchItems("Item 1", inListId: list.id)
+        XCTAssertEqual(specificResults.count, 1)
+        XCTAssertEqual(specificResults.first?.name, "Test Item 1")
+    }
+    
+    func testCategoryStatsAggregation() async throws {
+        let list = try await shoppingListRepo.createList(title: "Test List")
+        let stats = try await shoppingItemRepo.fetchCategoryStatsStructured(forListId: list.id)
+        
+        // Should have stats for 2 categories (Produce and Dairy)
+        XCTAssertEqual(stats.count, 2)
+        
+        let produceStats = stats.first { $0.name == "Produce" }
+        XCTAssertNotNil(produceStats)
+        XCTAssertEqual(produceStats?.itemCount, 1)
+        XCTAssertEqual(produceStats?.completedCount, 0)
+    }
+    
+    func testQueryComposition() async throws {
+        // Test that queries can be composed and still type-check
+        let list = try await shoppingListRepo.createList(title: "Search Test")
+        
+        do {
+            let query = QueryInterface<ShoppingItemsTable>
+                .forList(list.id)
+                .where(shoppingItemsTable.name.like("%Test%"))
+                .orderBy(.desc(shoppingItemsTable.createdAt))
+            
+            let results = try await database.reader.read { db in
+                try query.fetchAll(db)
+            }
+            
+            XCTAssertEqual(results.count, 2)
+        } catch {
+            XCTFail("Query composition failed: \\(error)")
+        }
+    }
+    
+    func testCompileTimeTypeSafety() {
+        // This test verifies that queries are type-safe at compile time
+        // If any of these don't compile, the type safety is working!
+        
+        let _ = QueryInterface<ShoppingListsTable>
+            .allOrderedByDate()
+            .where(shoppingListsTable.title == "Test")
+            .limit(10)
+        
+        let _ = QueryInterface<ShoppingItemsTable>
+            .forList("test-id")
+            .where(shoppingItemsTable.isCompleted == 0)
+            .orderBy(.asc(shoppingItemsTable.name))
+        
+        // These should NOT compile if you uncomment them:
+        // let _ = shoppingListsTable.nonExistentColumn  // ❌ Compile error
+        // let _ = shoppingItemsTable.title               // ❌ Wrong table
+        
+        XCTAssertTrue(true, "All queries compiled successfully")
     }
 }
 ```
 
-Run tests:
-```bash
-xcodebuild test -scheme Library -destination 'platform=iOS Simulator,name=iPhone 15'
-```
+**✅ Completion Check:**
+- [ ] Type-safe query tests pass
+- [ ] Complex JOIN queries tested
+- [ ] Search functionality verified
+- [ ] Compile-time type safety confirmed
 
 ---
 
@@ -1060,38 +927,51 @@ xcodebuild test -scheme Library -destination 'platform=iOS Simulator,name=iPhone
 
 Before moving to Chapter 4, ensure:
 
-- [ ] ✅ SwiftData models work correctly
-- [ ] ✅ Data persists between app launches
-- [ ] ✅ Repository pattern handles CRUD operations
-- [ ] ✅ Relationships between lists and items work
-- [ ] ✅ All UI components use SwiftData entities
-- [ ] ✅ Error handling is in place
-- [ ] ✅ Tests pass successfully
-- [ ] ✅ Sample data loads on first launch
+- [ ] ✅ StructuredQueries library geïntegreerd
+- [ ] ✅ Type-safe table definitions gecreëerd
+- [ ] ✅ Query builders voor alle belangrijke operations
+- [ ] ✅ Repository methods updated met structured queries
+- [ ] ✅ @FetchAll property wrappers werkend
+- [ ] ✅ Reactive SwiftUI views geïmplementeerd
+- [ ] ✅ Real-time UI updates via database observations
+- [ ] ✅ All structured query tests passing
 
 ### What You've Built
 
-🎊 **Excellent work!** You now have:
+🎊 **Fantastisch werk!** Je hebt nu:
 
-- **Persistent Storage**: Data survives app restarts
-- **Modern SwiftData**: Using Apple's latest data framework
-- **Clean Architecture**: Repository pattern separates data logic
-- **Robust Relationships**: Lists and items are properly connected
-- **Error Handling**: Graceful handling of storage issues
-- **Test Coverage**: Comprehensive tests for data operations
+- **Type-Safe SQL Queries**: Compile-time validatie van alle database queries
+- **Reactive UI Architecture**: SwiftUI views die automatisch updaten met database changes
+- **Advanced Query Composition**: Complex JOINs, aggregations, en search patterns
+- **Real-Time Updates**: @FetchAll property wrapper voor seamless data binding
+- **Performance Optimized**: Efficient database observations zonder memory leaks
+- **Point-Free Architecture**: Database-driven UI met moderne Swift patterns
+- **Compile-Time Safety**: Geen runtime SQL errors meer mogelijk
 
-### Performance Notes
+### Key Learnings
 
-Your app should now:
-- ✅ Start instantly (no loading screens needed)
-- ✅ Work completely offline
-- ✅ Handle large amounts of data efficiently
-- ✅ Maintain data integrity across sessions
+📚 **Je hebt geleerd:**
+- StructuredQueries voor type-safe SQL query building
+- SharingGRDB voor reactive database observations
+- Advanced SwiftUI integration met database state
+- Complex query composition patterns
+- Real-time UI update architectuur
+- Performance optimization voor database-driven apps
+
+### Point-Free Benefits
+
+🌟 **Waarom deze aanpak revolutionair is:**
+- **Zero Runtime SQL Errors**: Alle queries gevalideerd tijdens compilation
+- **Automatic UI Updates**: Database changes triggeren instant UI updates
+- **Type-Safe Composition**: Queries kunnen veilig gecombineerd worden
+- **Performance**: Optimale database observations zonder boilerplate
+- **Maintainable**: Schema changes worden gevangen door compiler
+- **Testable**: Makkelijk testbare query logic
 
 ### Next Steps
 
-Ready for **Chapter 4: Single User Polish**? You'll add advanced features like search, filtering, and UI improvements!
+Ready for **Chapter 4: SQL Triggers & Validatie**? Je gaat business logic naar de database verplaatsen voor ultimate data consistency!
 
 ---
 
-**🤔 Having issues?** Make sure all tests pass and your data persists correctly before moving on!
+**🤔 Vragen over reactive patterns?** Test je queries grondig en experimenteer met advanced compositions!

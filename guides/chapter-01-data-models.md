@@ -1,7 +1,7 @@
-# Chapter 1: Data Models Setup
+# Chapter 1: SQL Schema & Value Types
 
 **⏱️ Estimated Time:** 1 Week  
-**🎯 Learning Objective:** Create the foundation data models for QuickCart
+**🎯 Learning Objective:** Definieer je database schema met Swift value types volgens Point-Free moderne persistence
 
 ---
 
@@ -10,45 +10,194 @@
 Before starting this chapter:
 - [ ] Your modular project structure is set up (✅ Done)
 - [ ] Library package exists with Models target (✅ Done)
-- [ ] Basic understanding of Swift structs and enums
+- [ ] Basic understanding of Swift structs and SQL
+- [ ] Xcode 15+ installed
 
 ---
 
 ## 🎯 Chapter Goals
 
 By the end of this chapter, you will have:
-- ✅ A complete `ShoppingItem` model with all necessary properties
-- ✅ A robust `ShoppingList` model that can hold multiple items
-- ✅ Proper model validation and error handling
-- ✅ Sample data for testing
-- ✅ Unit tests covering your models
+- ✅ Een complete SQLite database schema voor QuickCart
+- ✅ Swift value type models die je SQL schema representeren
+- ✅ GRDB dependency setup in je project
+- ✅ Database migrations voor schema versioning
+- ✅ Sample data factory voor testing
+- ✅ Comprehensive tests voor je models en database schema
+
+**🌟 Point-Free Principle:** *"Start with the database schema, then build Swift types that mirror it exactly"*
 
 ---
 
-## 📚 Lesson 1.1: Basic ShoppingItem Model
+## 📚 Lesson 1.1: Setup GRDB Dependency
 
-### Task 1: Create the ShoppingItem Model
+### Task 1: Add GRDB to Package.swift
 
-**Location:** `Library/Sources/Models/ShoppingItem.swift`
+**Location:** `Library/Package.swift`
+
+Update je package dependencies:
+
+```swift
+// swift-tools-version: 5.9
+import PackageDescription
+
+let package = Package(
+    name: "Library",
+    platforms: [
+        .iOS(.v17),
+        .macOS(.v14)
+    ],
+    products: [
+        .library(name: "Models", targets: ["Models"]),
+        .library(name: "AppFeature", targets: ["AppFeature"]),
+    ],
+    dependencies: [
+        // Point-Free Modern Persistence Stack
+        .package(url: "https://github.com/groue/GRDB.swift.git", from: "6.24.0"),
+        .package(url: "https://github.com/pointfreeco/swift-sharing.git", from: "1.0.0"),
+    ],
+    targets: [
+        .target(
+            name: "Models",
+            dependencies: [
+                .product(name: "GRDB", package: "GRDB.swift"),
+                .product(name: "Sharing", package: "swift-sharing"),
+            ]
+        ),
+        .target(
+            name: "AppFeature",
+            dependencies: ["Models"]
+        ),
+        .testTarget(
+            name: "LibraryTests",
+            dependencies: ["Models", "AppFeature"]
+        ),
+    ]
+)
+```
+
+**✅ Completion Check:**
+- [ ] Package.swift is updated with GRDB dependency
+- [ ] Project builds without errors
+- [ ] Dependencies resolve correctly
+
+---
+
+## 📚 Lesson 1.2: Design SQLite Database Schema
+
+### Task 2: Create Database Schema
+
+**Location:** `Library/Sources/Models/Schema.sql`
+
+Definieer je database schema volgens Point-Free patterns:
+
+```sql
+-- QuickCart Database Schema v1.0
+-- Based on Point-Free Modern Persistence patterns
+
+-- Shopping Lists Table
+CREATE TABLE IF NOT EXISTS shopping_lists (
+    id TEXT PRIMARY KEY NOT NULL,
+    title TEXT NOT NULL,
+    created_at REAL NOT NULL, -- Unix timestamp
+    updated_at REAL NOT NULL
+);
+
+-- Item Categories (as enum values)
+CREATE TABLE IF NOT EXISTS item_categories (
+    id INTEGER PRIMARY KEY,
+    name TEXT UNIQUE NOT NULL,
+    emoji TEXT NOT NULL,
+    sort_order INTEGER NOT NULL
+);
+
+-- Insert default categories
+INSERT OR IGNORE INTO item_categories (id, name, emoji, sort_order) VALUES
+(1, 'Produce', '🥬', 1),
+(2, 'Dairy', '🥛', 2),
+(3, 'Meat & Seafood', '🥩', 3),
+(4, 'Frozen', '🧊', 4),
+(5, 'Pantry', '🥫', 5),
+(6, 'Household', '🧽', 6),
+(7, 'Personal Care', '🧴', 7),
+(8, 'Other', '📦', 8);
+
+-- Shopping Items Table
+CREATE TABLE IF NOT EXISTS shopping_items (
+    id TEXT PRIMARY KEY NOT NULL,
+    name TEXT NOT NULL,
+    quantity INTEGER NOT NULL DEFAULT 1,
+    is_completed INTEGER NOT NULL DEFAULT 0, -- SQLite boolean as INTEGER
+    notes TEXT NOT NULL DEFAULT '',
+    category_id INTEGER NOT NULL DEFAULT 8, -- Foreign key to categories
+    shopping_list_id TEXT NOT NULL, -- Foreign key to lists
+    created_at REAL NOT NULL,
+    updated_at REAL NOT NULL,
+    
+    FOREIGN KEY (category_id) REFERENCES item_categories (id),
+    FOREIGN KEY (shopping_list_id) REFERENCES shopping_lists (id) ON DELETE CASCADE
+);
+
+-- Indexes for performance
+CREATE INDEX IF NOT EXISTS idx_items_list_id ON shopping_items (shopping_list_id);
+CREATE INDEX IF NOT EXISTS idx_items_category ON shopping_items (category_id);
+CREATE INDEX IF NOT EXISTS idx_items_completed ON shopping_items (is_completed);
+CREATE INDEX IF NOT EXISTS idx_lists_updated ON shopping_lists (updated_at DESC);
+```
+
+**✅ Completion Check:**
+- [ ] SQL schema is syntactically correct
+- [ ] Foreign key relationships are defined
+- [ ] Indexes are added for performance
+- [ ] Default categories are populated
+
+---
+
+## 📚 Lesson 1.3: Create Swift Value Types
+
+### Task 3: Define Value Type Models
+
+**Location:** `Library/Sources/Models/ShoppingModels.swift`
 
 ```swift
 import Foundation
+import GRDB
 
-public struct ShoppingItem: Identifiable, Codable, Sendable {
-    public let id: UUID
-    public var name: String
-    public var quantity: Int
-    public var isCompleted: Bool
-    public var notes: String
+// MARK: - ItemCategory Value Type
+public struct ItemCategory: Codable, Hashable, Sendable {
+    public let id: Int
+    public let name: String
+    public let emoji: String
+    public let sortOrder: Int
+    
+    public init(id: Int, name: String, emoji: String, sortOrder: Int) {
+        self.id = id
+        self.name = name
+        self.emoji = emoji
+        self.sortOrder = sortOrder
+    }
+}
+
+// MARK: - ShoppingItem Value Type  
+public struct ShoppingItem: Codable, Hashable, Identifiable, Sendable {
+    public let id: String
+    public let name: String
+    public let quantity: Int
+    public let isCompleted: Bool
+    public let notes: String
+    public let categoryId: Int
+    public let shoppingListId: String
     public let createdAt: Date
-    public var updatedAt: Date
+    public let updatedAt: Date
     
     public init(
-        id: UUID = UUID(),
+        id: String = UUID().uuidString,
         name: String,
         quantity: Int = 1,
         isCompleted: Bool = false,
         notes: String = "",
+        categoryId: Int = 8, // Default to "Other"
+        shoppingListId: String,
         createdAt: Date = Date(),
         updatedAt: Date = Date()
     ) {
@@ -57,6 +206,28 @@ public struct ShoppingItem: Identifiable, Codable, Sendable {
         self.quantity = quantity
         self.isCompleted = isCompleted
         self.notes = notes
+        self.categoryId = categoryId
+        self.shoppingListId = shoppingListId
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+}
+
+// MARK: - ShoppingList Value Type
+public struct ShoppingList: Codable, Hashable, Identifiable, Sendable {
+    public let id: String
+    public let title: String
+    public let createdAt: Date
+    public let updatedAt: Date
+    
+    public init(
+        id: String = UUID().uuidString,
+        title: String,
+        createdAt: Date = Date(),
+        updatedAt: Date = Date()
+    ) {
+        self.id = id
+        self.title = title
         self.createdAt = createdAt
         self.updatedAt = updatedAt
     }
@@ -68,433 +239,383 @@ public extension ShoppingItem {
         quantity > 1 ? "\(quantity)x \(name)" : name
     }
 }
-
-// MARK: - Mutations
-public extension ShoppingItem {
-    mutating func toggle() {
-        isCompleted.toggle()
-        updatedAt = Date()
-    }
-    
-    mutating func updateQuantity(_ newQuantity: Int) {
-        guard newQuantity > 0 else { return }
-        quantity = newQuantity
-        updatedAt = Date()
-    }
-}
 ```
 
 **✅ Completion Check:**
-- [ ] Model compiles without errors
-- [ ] All properties are properly initialized
-- [ ] Public API is correctly exposed
+- [ ] Value types mirror SQL schema exactly
+- [ ] All properties are immutable (let)
+- [ ] Types conform to Codable, Hashable, Sendable
+- [ ] No business logic in models (pure data)
 
 ---
 
-## 📚 Lesson 1.2: Categories System
+## 📚 Lesson 1.4: Database Records (GRDB Integration)
 
-### Task 2: Add Item Categories
+### Task 4: Create GRDB Database Records
 
-Add this to your `ShoppingItem.swift` file:
-
-```swift
-public enum ItemCategory: String, CaseIterable, Codable, Sendable {
-    case produce = "Produce"
-    case dairy = "Dairy"
-    case meat = "Meat & Seafood"
-    case pantry = "Pantry"
-    case frozen = "Frozen"
-    case household = "Household"
-    case personal = "Personal Care"
-    case other = "Other"
-    
-    public var emoji: String {
-        switch self {
-        case .produce: return "🥬"
-        case .dairy: return "🥛"
-        case .meat: return "🥩"
-        case .pantry: return "🥫"
-        case .frozen: return "🧊"
-        case .household: return "🧽"
-        case .personal: return "🧴"
-        case .other: return "📦"
-        }
-    }
-    
-    public var sortOrder: Int {
-        switch self {
-        case .produce: return 1
-        case .dairy: return 2
-        case .meat: return 3
-        case .frozen: return 4
-        case .pantry: return 5
-        case .household: return 6
-        case .personal: return 7
-        case .other: return 8
-        }
-    }
-}
-```
-
-### Task 3: Add Category to ShoppingItem
-
-Update your `ShoppingItem` model:
-
-```swift
-public struct ShoppingItem: Identifiable, Codable, Sendable {
-    // ... existing properties ...
-    public var category: ItemCategory
-    
-    public init(
-        id: UUID = UUID(),
-        name: String,
-        quantity: Int = 1,
-        isCompleted: Bool = false,
-        notes: String = "",
-        category: ItemCategory = .other,
-        createdAt: Date = Date(),
-        updatedAt: Date = Date()
-    ) {
-        // ... existing initialization ...
-        self.category = category
-    }
-}
-```
-
-**✅ Completion Check:**
-- [ ] Categories enum is complete
-- [ ] ShoppingItem includes category property
-- [ ] All categories have emojis and sort orders
-
----
-
-## 📚 Lesson 1.3: ShoppingList Model
-
-### Task 4: Create the ShoppingList Model
-
-**Location:** `Library/Sources/Models/ShoppingList.swift`
+**Location:** `Library/Sources/Models/DatabaseRecords.swift`
 
 ```swift
 import Foundation
+import GRDB
 
-public struct ShoppingList: Identifiable, Codable, Sendable {
-    public let id: UUID
-    public var title: String
-    public var items: [ShoppingItem]
-    public let createdAt: Date
-    public var updatedAt: Date
+// MARK: - ItemCategory Database Record
+extension ItemCategory: FetchableRecord, PersistableRecord {
+    public static let databaseTableName = "item_categories"
     
-    public init(
-        id: UUID = UUID(),
-        title: String,
-        items: [ShoppingItem] = [],
-        createdAt: Date = Date(),
-        updatedAt: Date = Date()
-    ) {
-        self.id = id
-        self.title = title
-        self.items = items
-        self.createdAt = createdAt
-        self.updatedAt = updatedAt
+    public enum Columns {
+        static let id = Column("id")
+        static let name = Column("name")
+        static let emoji = Column("emoji")
+        static let sortOrder = Column("sort_order")
     }
 }
 
-// MARK: - Computed Properties
-public extension ShoppingList {
-    var completedItems: [ShoppingItem] {
-        items.filter(\.isCompleted)
+// MARK: - ShoppingList Database Record
+extension ShoppingList: FetchableRecord, PersistableRecord {
+    public static let databaseTableName = "shopping_lists"
+    
+    public enum Columns {
+        static let id = Column("id")
+        static let title = Column("title")
+        static let createdAt = Column("created_at")
+        static let updatedAt = Column("updated_at")
     }
     
-    var pendingItems: [ShoppingItem] {
-        items.filter { !$0.isCompleted }
+    // Convert dates to/from Unix timestamps for SQLite
+    public init(row: Row) throws {
+        id = row[Columns.id]
+        title = row[Columns.title]
+        createdAt = Date(timeIntervalSince1970: row[Columns.createdAt])
+        updatedAt = Date(timeIntervalSince1970: row[Columns.updatedAt])
     }
     
-    var completionPercentage: Double {
-        guard !items.isEmpty else { return 0 }
-        return Double(completedItems.count) / Double(items.count)
-    }
-    
-    var itemsByCategory: [ItemCategory: [ShoppingItem]] {
-        Dictionary(grouping: items) { $0.category }
+    public func encode(to container: inout PersistenceContainer) throws {
+        container[Columns.id] = id
+        container[Columns.title] = title
+        container[Columns.createdAt] = createdAt.timeIntervalSince1970
+        container[Columns.updatedAt] = updatedAt.timeIntervalSince1970
     }
 }
 
-// MARK: - Mutations
-public extension ShoppingList {
-    mutating func addItem(_ item: ShoppingItem) {
-        items.append(item)
-        updatedAt = Date()
+// MARK: - ShoppingItem Database Record
+extension ShoppingItem: FetchableRecord, PersistableRecord {
+    public static let databaseTableName = "shopping_items"
+    
+    public enum Columns {
+        static let id = Column("id")
+        static let name = Column("name")
+        static let quantity = Column("quantity")
+        static let isCompleted = Column("is_completed")
+        static let notes = Column("notes")
+        static let categoryId = Column("category_id")
+        static let shoppingListId = Column("shopping_list_id")
+        static let createdAt = Column("created_at")
+        static let updatedAt = Column("updated_at")
     }
     
-    mutating func removeItem(withId id: UUID) {
-        items.removeAll { $0.id == id }
-        updatedAt = Date()
+    public init(row: Row) throws {
+        id = row[Columns.id]
+        name = row[Columns.name]
+        quantity = row[Columns.quantity]
+        isCompleted = row[Columns.isCompleted]
+        notes = row[Columns.notes]
+        categoryId = row[Columns.categoryId]
+        shoppingListId = row[Columns.shoppingListId]
+        createdAt = Date(timeIntervalSince1970: row[Columns.createdAt])
+        updatedAt = Date(timeIntervalSince1970: row[Columns.updatedAt])
     }
     
-    mutating func updateItem(_ updatedItem: ShoppingItem) {
-        if let index = items.firstIndex(where: { $0.id == updatedItem.id }) {
-            items[index] = updatedItem
-            updatedAt = Date()
-        }
-    }
-    
-    mutating func clearCompleted() {
-        items.removeAll(where: \.isCompleted)
-        updatedAt = Date()
+    public func encode(to container: inout PersistenceContainer) throws {
+        container[Columns.id] = id
+        container[Columns.name] = name
+        container[Columns.quantity] = quantity
+        container[Columns.isCompleted] = isCompleted
+        container[Columns.notes] = notes
+        container[Columns.categoryId] = categoryId
+        container[Columns.shoppingListId] = shoppingListId
+        container[Columns.createdAt] = createdAt.timeIntervalSince1970
+        container[Columns.updatedAt] = updatedAt.timeIntervalSince1970
     }
 }
 ```
 
 **✅ Completion Check:**
-- [ ] ShoppingList model compiles
-- [ ] Computed properties work correctly
-- [ ] Mutation methods update `updatedAt`
+- [ ] All records conform to FetchableRecord & PersistableRecord
+- [ ] Column enums are defined for type safety
+- [ ] Date conversion handles Unix timestamps correctly
+- [ ] Database table names match SQL schema
 
 ---
 
-## 📚 Lesson 1.4: Sample Data
+## 📚 Lesson 1.5: Database Migration System
 
-### Task 5: Create Sample Data Factory
+### Task 5: Setup Database Migrations
+
+**Location:** `Library/Sources/Models/DatabaseMigrator.swift`
+
+```swift
+import Foundation
+import GRDB
+
+public struct DatabaseMigrator {
+    public static func migrator() -> DatabaseMigrator {
+        var migrator = DatabaseMigrator()
+        
+        // Version 1.0: Initial Schema
+        migrator.registerMigration("v1.0") { db in
+            // Create shopping_lists table
+            try db.execute(sql: """
+                CREATE TABLE shopping_lists (
+                    id TEXT PRIMARY KEY NOT NULL,
+                    title TEXT NOT NULL,
+                    created_at REAL NOT NULL,
+                    updated_at REAL NOT NULL
+                )
+                """)
+            
+            // Create item_categories table
+            try db.execute(sql: """
+                CREATE TABLE item_categories (
+                    id INTEGER PRIMARY KEY,
+                    name TEXT UNIQUE NOT NULL,
+                    emoji TEXT NOT NULL,
+                    sort_order INTEGER NOT NULL
+                )
+                """)
+            
+            // Insert default categories
+            try db.execute(sql: """
+                INSERT INTO item_categories (id, name, emoji, sort_order) VALUES
+                (1, 'Produce', '🥬', 1),
+                (2, 'Dairy', '🥛', 2),
+                (3, 'Meat & Seafood', '🥩', 3),
+                (4, 'Frozen', '🧊', 4),
+                (5, 'Pantry', '🥫', 5),
+                (6, 'Household', '🧽', 6),
+                (7, 'Personal Care', '🧴', 7),
+                (8, 'Other', '📦', 8)
+                """)
+            
+            // Create shopping_items table
+            try db.execute(sql: """
+                CREATE TABLE shopping_items (
+                    id TEXT PRIMARY KEY NOT NULL,
+                    name TEXT NOT NULL,
+                    quantity INTEGER NOT NULL DEFAULT 1,
+                    is_completed INTEGER NOT NULL DEFAULT 0,
+                    notes TEXT NOT NULL DEFAULT '',
+                    category_id INTEGER NOT NULL DEFAULT 8,
+                    shopping_list_id TEXT NOT NULL,
+                    created_at REAL NOT NULL,
+                    updated_at REAL NOT NULL,
+                    
+                    FOREIGN KEY (category_id) REFERENCES item_categories (id),
+                    FOREIGN KEY (shopping_list_id) REFERENCES shopping_lists (id) ON DELETE CASCADE
+                )
+                """)
+            
+            // Create indexes
+            try db.execute(sql: "CREATE INDEX idx_items_list_id ON shopping_items (shopping_list_id)")
+            try db.execute(sql: "CREATE INDEX idx_items_category ON shopping_items (category_id)")
+            try db.execute(sql: "CREATE INDEX idx_items_completed ON shopping_items (is_completed)")
+            try db.execute(sql: "CREATE INDEX idx_lists_updated ON shopping_lists (updated_at DESC)")
+        }
+        
+        return migrator
+    }
+}
+```
+
+---
+
+## 📚 Lesson 1.6: Sample Data Factory
+
+### Task 6: Create Sample Data for Testing
 
 **Location:** `Library/Sources/Models/SampleData.swift`
 
 ```swift
 import Foundation
 
-public enum SampleData {
-    public static let sampleItems: [ShoppingItem] = [
-        ShoppingItem(name: "Bananas", quantity: 6, category: .produce),
-        ShoppingItem(name: "Milk", quantity: 1, category: .dairy),
-        ShoppingItem(name: "Chicken Breast", quantity: 2, category: .meat),
-        ShoppingItem(name: "Rice", quantity: 1, category: .pantry, notes: "Basmati preferred"),
-        ShoppingItem(name: "Ice Cream", quantity: 1, category: .frozen),
-        ShoppingItem(name: "Dish Soap", quantity: 1, category: .household),
-        ShoppingItem(name: "Toothpaste", quantity: 1, category: .personal),
+public struct SampleData {
+    
+    // Sample Categories (matches database)
+    public static let categories: [ItemCategory] = [
+        ItemCategory(id: 1, name: "Produce", emoji: "🥬", sortOrder: 1),
+        ItemCategory(id: 2, name: "Dairy", emoji: "🥛", sortOrder: 2),
+        ItemCategory(id: 3, name: "Meat & Seafood", emoji: "🥩", sortOrder: 3),
+        ItemCategory(id: 4, name: "Frozen", emoji: "🧊", sortOrder: 4),
+        ItemCategory(id: 5, name: "Pantry", emoji: "🥫", sortOrder: 5),
+        ItemCategory(id: 6, name: "Household", emoji: "🧽", sortOrder: 6),
+        ItemCategory(id: 7, name: "Personal Care", emoji: "🧴", sortOrder: 7),
+        ItemCategory(id: 8, name: "Other", emoji: "📦", sortOrder: 8),
     ]
     
-    public static let sampleLists: [ShoppingList] = [
+    // Sample Shopping Lists
+    public static let shoppingLists: [ShoppingList] = [
         ShoppingList(
-            title: "Weekly Groceries",
-            items: Array(sampleItems.prefix(5))
+            id: "list-1",
+            title: "Boodschappen deze week",
+            createdAt: Date().addingTimeInterval(-86400 * 2), // 2 days ago
+            updatedAt: Date().addingTimeInterval(-3600) // 1 hour ago
         ),
         ShoppingList(
-            title: "Party Supplies",
-            items: [
-                ShoppingItem(name: "Chips", quantity: 3, category: .pantry),
-                ShoppingItem(name: "Soda", quantity: 6, category: .other),
-                ShoppingItem(name: "Napkins", quantity: 1, category: .household),
-            ]
+            id: "list-2", 
+            title: "Feestje supplies",
+            createdAt: Date().addingTimeInterval(-86400), // 1 day ago
+            updatedAt: Date().addingTimeInterval(-1800) // 30 minutes ago
         ),
         ShoppingList(
-            title: "Quick Run",
-            items: [
-                ShoppingItem(name: "Bread", quantity: 1, category: .pantry),
-                ShoppingItem(name: "Eggs", quantity: 12, category: .dairy),
-            ]
+            id: "list-3",
+            title: "Quick run naar winkel",
+            createdAt: Date().addingTimeInterval(-3600 * 6), // 6 hours ago
+            updatedAt: Date().addingTimeInterval(-600) // 10 minutes ago
         )
+    ]
+    
+    // Sample Shopping Items
+    public static let shoppingItems: [ShoppingItem] = [
+        // Items for list-1 (Weekly groceries)
+        ShoppingItem(id: "item-1", name: "Bananen", quantity: 6, categoryId: 1, shoppingListId: "list-1"),
+        ShoppingItem(id: "item-2", name: "Melk", quantity: 1, categoryId: 2, shoppingListId: "list-1"),
+        ShoppingItem(id: "item-3", name: "Kipfilet", quantity: 2, categoryId: 3, shoppingListId: "list-1"),
+        ShoppingItem(id: "item-4", name: "IJs", quantity: 1, categoryId: 4, shoppingListId: "list-1"),
+        ShoppingItem(id: "item-5", name: "Rijst", quantity: 1, categoryId: 5, shoppingListId: "list-1", notes: "Basmati bij voorkeur"),
+        
+        // Items for list-2 (Party supplies) 
+        ShoppingItem(id: "item-6", name: "Chips", quantity: 3, categoryId: 5, shoppingListId: "list-2"),
+        ShoppingItem(id: "item-7", name: "Frisdrank", quantity: 6, categoryId: 8, shoppingListId: "list-2"),
+        ShoppingItem(id: "item-8", name: "Servetten", quantity: 1, categoryId: 6, shoppingListId: "list-2"),
+        
+        // Items for list-3 (Quick run)
+        ShoppingItem(id: "item-9", name: "Brood", quantity: 1, categoryId: 5, shoppingListId: "list-3"),
+        ShoppingItem(id: "item-10", name: "Eieren", quantity: 12, categoryId: 2, shoppingListId: "list-3", isCompleted: true),
     ]
 }
 ```
 
 **✅ Completion Check:**
-- [ ] Sample data compiles
-- [ ] Diverse categories represented
-- [ ] Different quantities and notes included
+- [ ] Sample data matches database schema exactly
+- [ ] Foreign key relationships are correct
+- [ ] Mix of completed and pending items
+- [ ] Diverse categories and quantities represented
 
 ---
 
-## 📚 Lesson 1.5: Model Validation
+## 🧪 Testing Your Database Schema
 
-### Task 6: Add Validation
+### Task 7: Create Comprehensive Tests
 
-Add validation to your models:
-
-```swift
-// Add to ShoppingItem.swift
-public extension ShoppingItem {
-    var isValid: Bool {
-        !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
-        quantity > 0
-    }
-    
-    enum ValidationError: Error, LocalizedError {
-        case emptyName
-        case invalidQuantity
-        
-        public var errorDescription: String? {
-            switch self {
-            case .emptyName:
-                return "Item name cannot be empty"
-            case .invalidQuantity:
-                return "Quantity must be greater than 0"
-            }
-        }
-    }
-    
-    func validate() throws {
-        if name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            throw ValidationError.emptyName
-        }
-        if quantity <= 0 {
-            throw ValidationError.invalidQuantity
-        }
-    }
-}
-
-// Add to ShoppingList.swift
-public extension ShoppingList {
-    var isValid: Bool {
-        !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    }
-    
-    enum ValidationError: Error, LocalizedError {
-        case emptyTitle
-        
-        public var errorDescription: String? {
-            switch self {
-            case .emptyTitle:
-                return "List title cannot be empty"
-            }
-        }
-    }
-    
-    func validate() throws {
-        if title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            throw ValidationError.emptyTitle
-        }
-    }
-}
-```
-
----
-
-## 🧪 Testing Your Work
-
-### Task 7: Create Unit Tests
-
-**Location:** `Library/Tests/LibraryTests/ModelsTests.swift`
+**Location:** `Library/Tests/LibraryTests/DatabaseSchemaTests.swift`
 
 ```swift
 import XCTest
+import GRDB
 @testable import Models
 
-final class ShoppingItemTests: XCTestCase {
-    func testItemCreation() {
-        let item = ShoppingItem(name: "Test Item")
+final class DatabaseSchemaTests: XCTestCase {
+    var dbQueue: DatabaseQueue!
+    
+    override func setUp() {
+        super.setUp()
+        // Create in-memory database for testing
+        dbQueue = DatabaseQueue()
         
-        XCTAssertEqual(item.name, "Test Item")
-        XCTAssertEqual(item.quantity, 1)
-        XCTAssertFalse(item.isCompleted)
-        XCTAssertEqual(item.category, .other)
+        do {
+            try DatabaseMigrator.migrator().migrate(dbQueue)
+        } catch {
+            XCTFail("Failed to setup test database: \(error)")
+        }
     }
     
-    func testToggleCompletion() {
-        var item = ShoppingItem(name: "Test Item")
-        let originalDate = item.updatedAt
-        
-        // Small delay to ensure updatedAt changes
-        Thread.sleep(forTimeInterval: 0.01)
-        item.toggle()
-        
-        XCTAssertTrue(item.isCompleted)
-        XCTAssertGreaterThan(item.updatedAt, originalDate)
+    func testDatabaseSchemaCreation() throws {
+        try dbQueue.read { db in
+            // Test that all tables exist
+            XCTAssertTrue(try db.tableExists("shopping_lists"))
+            XCTAssertTrue(try db.tableExists("item_categories"))
+            XCTAssertTrue(try db.tableExists("shopping_items"))
+        }
     }
     
-    func testDisplayName() {
-        let singleItem = ShoppingItem(name: "Apple", quantity: 1)
-        let multipleItems = ShoppingItem(name: "Banana", quantity: 5)
-        
-        XCTAssertEqual(singleItem.displayName, "Apple")
-        XCTAssertEqual(multipleItems.displayName, "5x Banana")
+    func testDefaultCategoriesExist() throws {
+        try dbQueue.read { db in
+            let categories = try ItemCategory.fetchAll(db)
+            XCTAssertEqual(categories.count, 8)
+            
+            // Test specific categories
+            let produce = try ItemCategory.filter(ItemCategory.Columns.name == "Produce").fetchOne(db)
+            XCTAssertNotNil(produce)
+            XCTAssertEqual(produce?.emoji, "🥬")
+        }
     }
     
-    func testValidation() {
-        let validItem = ShoppingItem(name: "Valid Item")
-        let invalidItem = ShoppingItem(name: "", quantity: 0)
+    func testShoppingListCRUD() throws {
+        let list = ShoppingList(id: "test-list", title: "Test List")
         
-        XCTAssertTrue(validItem.isValid)
-        XCTAssertFalse(invalidItem.isValid)
+        try dbQueue.write { db in
+            // Insert
+            try list.insert(db)
+        }
         
-        XCTAssertNoThrow(try validItem.validate())
-        XCTAssertThrowsError(try invalidItem.validate())
-    }
-}
-
-final class ShoppingListTests: XCTestCase {
-    func testListCreation() {
-        let list = ShoppingList(title: "Test List")
+        // Fetch
+        let fetchedList = try dbQueue.read { db in
+            try ShoppingList.fetchOne(db, key: "test-list")
+        }
         
-        XCTAssertEqual(list.title, "Test List")
-        XCTAssertTrue(list.items.isEmpty)
-        XCTAssertEqual(list.completionPercentage, 0)
+        XCTAssertNotNil(fetchedList)
+        XCTAssertEqual(fetchedList?.title, "Test List")
     }
     
-    func testAddingItems() {
-        var list = ShoppingList(title: "Test List")
-        let item = ShoppingItem(name: "Test Item")
+    func testShoppingItemWithForeignKeys() throws {
+        let list = ShoppingList(id: "test-list", title: "Test List")
+        let item = ShoppingItem(
+            id: "test-item",
+            name: "Test Item",
+            categoryId: 1, // Produce
+            shoppingListId: "test-list"
+        )
         
-        list.addItem(item)
+        try dbQueue.write { db in
+            try list.insert(db)
+            try item.insert(db)
+        }
         
-        XCTAssertEqual(list.items.count, 1)
-        XCTAssertEqual(list.items.first?.name, "Test Item")
+        let fetchedItem = try dbQueue.read { db in
+            try ShoppingItem.fetchOne(db, key: "test-item")
+        }
+        
+        XCTAssertNotNil(fetchedItem)
+        XCTAssertEqual(fetchedItem?.name, "Test Item")
+        XCTAssertEqual(fetchedItem?.categoryId, 1)
     }
     
-    func testCompletionPercentage() {
-        var list = ShoppingList(title: "Test List")
-        var item1 = ShoppingItem(name: "Item 1")
-        var item2 = ShoppingItem(name: "Item 2")
+    func testForeignKeyConstraints() throws {
+        let item = ShoppingItem(
+            id: "orphan-item",
+            name: "Orphan Item", 
+            shoppingListId: "non-existent-list"
+        )
         
-        item1.toggle() // Complete first item
-        
-        list.addItem(item1)
-        list.addItem(item2)
-        
-        XCTAssertEqual(list.completionPercentage, 0.5)
+        // This should fail due to foreign key constraint
+        XCTAssertThrowsError(try dbQueue.write { db in
+            try item.insert(db)
+        })
     }
 }
 ```
 
-### Run Your Tests
-
+Run je tests:
 ```bash
 cd QuickCart
-xcodebuild test -scheme Library
+xcodebuild test -scheme Library -destination 'platform=iOS Simulator,name=iPhone 15'
 ```
 
 **✅ Completion Check:**
-- [ ] All tests pass
-- [ ] Code coverage is good
-- [ ] No compiler warnings
-
----
-
-## 📚 Lesson 1.6: Update Your Models Export
-
-### Task 8: Clean Up Models Module
-
-**Location:** `Library/Sources/Models/Models.swift`
-
-Replace the placeholder content with:
-
-```swift
-// Models Module - QuickCart Core Data Models
-
-// Export all public types
-@_exported import Foundation
-
-// This file serves as the main entry point for the Models module
-// Individual model files are automatically included
-```
-
-Update your file structure:
-```
-Library/Sources/Models/
-├── Models.swift          (main module file)
-├── ShoppingItem.swift    (item model)
-├── ShoppingList.swift    (list model)
-├── SampleData.swift      (test data)
-└── ItemCategory.swift    (move category here if you want)
-```
+- [ ] All database tests pass
+- [ ] Schema creation works correctly
+- [ ] Foreign key constraints are enforced
+- [ ] CRUD operations work with GRDB
 
 ---
 
@@ -504,28 +625,39 @@ Library/Sources/Models/
 
 Before moving to Chapter 2, ensure:
 
-- [ ] ✅ ShoppingItem model is complete with all properties
-- [ ] ✅ ItemCategory enum with emojis and sorting
-- [ ] ✅ ShoppingList model with computed properties
-- [ ] ✅ Sample data for testing
-- [ ] ✅ Model validation with error handling
-- [ ] ✅ Unit tests passing
-- [ ] ✅ Models module exports correctly
+- [ ] ✅ GRDB dependency is correctly added to Package.swift
+- [ ] ✅ SQLite database schema is properly designed
+- [ ] ✅ Swift value types mirror SQL schema exactly  
+- [ ] ✅ GRDB database records are implemented
+- [ ] ✅ Database migration system is working
+- [ ] ✅ Sample data factory matches schema
+- [ ] ✅ All database tests are passing
 - [ ] ✅ No compiler warnings or errors
 
 ### What You've Built
 
-🎊 **Congratulations!** You now have:
+🎊 **Gefeliciteerd!** Je hebt nu:
 
-- **Solid Foundation**: Robust data models that will power your entire app
-- **Type Safety**: Proper Swift types with validation
-- **Testability**: Unit tests ensuring your models work correctly
-- **Extensibility**: Models designed to grow with your app
+- **SQL-First Foundation**: Een solide database schema als fundament
+- **Type-Safe Models**: Swift value types die exact je database weerspiegelen
+- **Modern Persistence**: GRDB integration volgens Point-Free patterns
+- **Migration System**: Database versioning voor toekomstige updates
+- **Test Coverage**: Comprehensive tests voor je database layer
+- **Point-Free Architecture**: Database als "single source of truth"
+
+### Key Learnings
+
+📚 **Je hebt geleerd:**
+- Database-first design approach
+- SQLite schema design met foreign keys en indexes
+- Swift value types vs reference types voor data modeling
+- GRDB integration voor type-safe database toegang
+- Migration patterns voor schema evolutie
 
 ### Next Steps
 
-Ready for **Chapter 2: Core UI Components**? You'll use these models to build your first SwiftUI views!
+Ready for **Chapter 2: GRDB Repository Pattern**? Je gaat nu een type-safe repository layer bouwen!
 
 ---
 
-**🤔 Stuck or confused?** Review the code examples, run the tests, and don't hesitate to ask Claude Code for help!
+**🤔 Vragen of problemen?** Review je SQL schema, run de database tests, en vraag Claude Code om hulp bij complexe queries!
