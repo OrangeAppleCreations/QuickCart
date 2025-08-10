@@ -15,14 +15,17 @@ This implementation follows the exact patterns from Point-Free Episode 323 "Mode
 
 ## Implementation Steps
 
-### 1. Schema Design (Schema.swift)
+### 1. Complete Schema Implementation (Schema.swift)
 
-Create `Library/Sources/Models/Schema.swift` with 4 core data types:
+Create `Library/Sources/Models/Schema.swift` with all data types and database setup in one file, exactly like Point-Free Episode 323:
 
-#### ShoppingList
 ```swift
 import Foundation
+import OSLog
+import Dependencies
 import SharingGRDB
+
+// MARK: - Data Types
 
 @Table
 struct ShoppingList: Identifiable {
@@ -30,12 +33,6 @@ struct ShoppingList: Identifiable {
   var color = 0x4a99ef_ff  // Hex color for list theming
   var title = ""
 }
-```
-
-#### ShoppingItem
-```swift
-import Foundation
-import SharingGRDB
 
 @Table
 struct ShoppingItem: Identifiable {
@@ -55,40 +52,20 @@ struct ShoppingItem: Identifiable {
     case high = 3
   }
 }
-```
-
-#### Category (for organizing items)
-```swift
-import SharingGRDB
 
 @Table
 struct Category: Identifiable {
   let id: Int
   var title = ""
 }
-```
-
-#### ShoppingItemCategory (many-to-many join table)
-```swift
-import SharingGRDB
 
 @Table
 struct ShoppingItemCategory {
   let shoppingItemID: ShoppingItem.ID
   let categoryID: Category.ID
 }
-```
 
-### 2. Database Connection (DatabaseManager.swift)
-
-Create `Library/Sources/Models/DatabaseManager.swift`:
-
-#### Core Function
-```swift
-import Foundation
-import OSLog
-import Dependencies
-import SharingGRDB
+// MARK: - Database Setup
 
 func appDatabase() throws -> any DatabaseWriter {
   @Dependency(\.context) var context
@@ -194,7 +171,7 @@ private let logger = Logger(
 )
 ```
 
-### 3. Package Dependencies
+### 2. Package Dependencies
 
 Update `Library/Package.swift` to include required dependencies:
 
@@ -215,7 +192,7 @@ targets: [
 ]
 ```
 
-### 4. App Integration
+### 3. App Integration
 
 Initialize database in `QuickCart/QuickCartApp.swift`:
 
