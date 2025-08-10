@@ -7,8 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		C41EF7572E472DA100DD35C4 /* AppFeature in Frameworks */ = {isa = PBXBuildFile; productRef = C41EF7562E472DA100DD35C4 /* AppFeature */; };
-		C41EF7592E4736AC00DD35C4 /* Models in Frameworks */ = {isa = PBXBuildFile; productRef = C41EF7582E4736AC00DD35C4 /* Models */; };
+		C4F9547D2E488AAC000F3EEF /* AppFeature in Frameworks */ = {isa = PBXBuildFile; productRef = C4F9547C2E488AAC000F3EEF /* AppFeature */; };
+		C4F9547F2E488AAF000F3EEF /* Models in Frameworks */ = {isa = PBXBuildFile; productRef = C4F9547E2E488AAF000F3EEF /* Models */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -29,8 +29,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				C41EF7592E4736AC00DD35C4 /* Models in Frameworks */,
-				C41EF7572E472DA100DD35C4 /* AppFeature in Frameworks */,
+				C4F9547F2E488AAF000F3EEF /* Models in Frameworks */,
+				C4F9547D2E488AAC000F3EEF /* AppFeature in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -82,8 +82,8 @@
 			);
 			name = QuickCart;
 			packageProductDependencies = (
-				C41EF7562E472DA100DD35C4 /* AppFeature */,
-				C41EF7582E4736AC00DD35C4 /* Models */,
+				C4F9547C2E488AAC000F3EEF /* AppFeature */,
+				C4F9547E2E488AAF000F3EEF /* Models */,
 			);
 			productName = QuickCart;
 			productReference = C41EF73B2E471FF400DD35C4 /* QuickCart.app */;
@@ -355,11 +355,11 @@
 /* End XCConfigurationList section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		C41EF7562E472DA100DD35C4 /* AppFeature */ = {
+		C4F9547C2E488AAC000F3EEF /* AppFeature */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = AppFeature;
 		};
-		C41EF7582E4736AC00DD35C4 /* Models */ = {
+		C4F9547E2E488AAF000F3EEF /* Models */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = Models;
 		};

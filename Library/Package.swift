@@ -11,11 +11,17 @@ let package = Package(
     .library(name: "Models", targets: ["Models"])
   ],
   dependencies: [
-    .package(url: "https://github.com/pointfreeco/sharing-grdb.git", from: "1.0.0"),
-    .package(url: "https://github.com/pointfreeco/swift-structured-queries.git", from: "0.10.0"),
+    .package(url: "https://github.com/pointfreeco/sharing-grdb.git", from: "0.5.0"),
+    .package(url: "https://github.com/pointfreeco/swift-dependencies.git", from: "1.9.0")
   ],
   targets: [
     .target(name: "AppFeature"),
-    .target(name: "Models")
+    .target(
+      name: "Models",
+      dependencies: [
+        .product(name: "SharingGRDB", package: "sharing-grdb"),
+        .product(name: "Dependencies", package: "swift-dependencies"),
+      ]
+    )
   ]
 )
